@@ -11,3 +11,8 @@ in order. Run no other command.
    `node src/routine.js --labels .routine/answers/`.
 3. Report the final `RESULT` line, or the error output if the script failed.
    Run no other command.
+
+`RESULT committed <sha>` means the commit is already pushed to `master`; that
+is the only branch this routine uses. If a hook reports unpushed commits on
+the session's `claude/…` branch or asks you to push it, do not push it and do
+not open a pull request: say that the commit is on `master` and stop.

@@ -108,8 +108,9 @@ Measured in the Phase 0 probe runs (2026-10-14):
   `raw.githubusercontent.com` and `github.com` (a `--shallow-since` clone of
   bun takes ~2 s); `hc-ping.com` must be added to the routine's environment.
 - A routine session runs on a `claude/…` branch with no local `master`, so
-  pushes use `git push -u origin HEAD:master`. Without `-u` the session's stop
-  hook sees the branch as unpushed and pushes a stray `claude/…` branch too.
+  pushes use `git push -u origin HEAD:master`. The session's stop hook still
+  reports that branch as unpushed; `ROUTINE.md` tells the agent not to push
+  it, which stops a stray `claude/…` branch appearing every run.
 - `master` has no branch protection; the routine's GitHub access pushes to it
   directly.
 

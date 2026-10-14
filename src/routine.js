@@ -83,6 +83,8 @@ async function main(argv) {
 
   const counts = stageAndCount();
   run('git', ['commit', '--allow-empty', '-m', commitMessage(counts)]);
+  // Routine sessions run on a claude/… branch with no local master, so name the source.
+  // The stray-branch push the session's stop hook asks for is declined in ROUTINE.md, not here.
   run('git', ['push', '-u', 'origin', 'HEAD:master']);
   const sha = run('git', ['rev-parse', 'HEAD']).trim();
   console.log(`RESULT committed ${sha} events=${counts.events} labels=${counts.labels}`);
