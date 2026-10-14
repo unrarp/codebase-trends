@@ -1,0 +1,30 @@
+{
+  "project": "claude-code",
+  "name": "Claude Code",
+  "basis": "changelog",
+  "generatedAt": "2026-10-14T16:57:46.342Z",
+  "firstDate": "2025-03-04",
+  "lastDate": "2026-10-14",
+  "totals": {
+    "events": 7724,
+    "byCategory": {
+      "added": 1172,
+      "fixed": 4682,
+      "changed": 757,
+      "improved": 1017,
+      "removed": 73,
+      "other": 23
+    },
+    "bySource": {
+      "rule": 6906,
+      "model": 818,
+      "pending": 0
+    },
+    "versions": 419
+  },
+  "medianPerReleaseDay": 9,
+  "busiestDay": {
+    "d": "2026-10-05",
+    "n": 190
+  }
+}
