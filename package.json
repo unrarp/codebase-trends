@@ -1,0 +1,17 @@
+{
+  "name": "codebase-trends",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "collect": "node src/collect.js",
+    "build": "node src/build.js",
+    "test": "node --test 'test/**/*.test.js'",
+    "check:syntax": "for f in $(find src scripts -name '*.js' 2>/dev/null); do node --check \"$f\" || exit 1; done",
+    "check:data": "exit 0",
+    "check:browser": "exit 0",
+    "check:core": "npm run test && npm run check:syntax && npm run check:data",
+    "check": "npm run check:core && npm run check:browser",
+    "classify-local": "scripts/classify-local.sh"
+  }
+}
