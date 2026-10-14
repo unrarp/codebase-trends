@@ -118,3 +118,17 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
     });
   });
 }
+
+test('a category without a palette colour is still drawn, with a fallback colour', async ({ page }) => {
+  await page.route('**/data/claude-code/summary.json', async (route) => {
+    const res = await route.fetch();
+    const s = await res.json();
+    s.totals.byCategory.mystery = 0;
+    await route.fulfill({ response: res, json: s });
+  });
+  const errors = await open(page, 'claude-code/');
+  await expect(page.locator('#legend button', { hasText: 'Mystery' })).toHaveCount(1);
+  const color = await page.evaluate(() => __chart.data.datasets.find((d) => d.label === 'Mystery')?.backgroundColor({ dataIndex: -1 }));
+  expect(color).toMatch(/^#[0-9a-f]{6}$/);
+  expect(errors).toEqual([]);
+});

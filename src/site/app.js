@@ -1,6 +1,7 @@
 (() => {
 const PAL = { fixed: '#3b8ff5', changed: '#f0b429', improved: '#b474ff', added: '#2fbf4a', other: '#8a8f98', removed: '#e5484d',
   revert: '#ec6f9b', chore: '#5c6670', test: '#2bb8b0', docs: '#6c7ae0', ci: '#c97a3a' };
+const catColor = (c) => PAL[c] ?? PAL.other; // a category added without a palette entry still draws
 const ACCENT = '#e8702a';
 const MARKER = '#f0932b';
 const DAY = 86_400_000;
@@ -104,7 +105,7 @@ async function projectPage() {
 
     const bar = { stack: 's', borderWidth: 0, categoryPercentage: 1, barPercentage: 0.9, order: 2 };
     const datasets = state.tab === 'type'
-      ? cats.map((c) => ({ ...bar, label: cap(c), data: rows.map((r) => r.counts[c] ?? 0), backgroundColor: fade(PAL[c]), hidden: state.hidden.has(c) }))
+      ? cats.map((c) => ({ ...bar, label: cap(c), data: rows.map((r) => r.counts[c] ?? 0), backgroundColor: fade(catColor(c)), hidden: state.hidden.has(c) }))
       : [{ ...bar, label: state.tab === 'releases' ? 'Versions' : noun, data: rows.map(metric), backgroundColor: fade(state.tab === 'releases' ? ACCENT : PAL.fixed) }];
     const line = (label, data, color, yAxisID) => ({ type: 'line', label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, pointHitRadius: 0, tension: 0.2, yAxisID, order: 1, spanGaps: false });
     if (state.overlays.has('avg') && view === 'day') datasets.push(line('7-day average', avgSeries, '#ffffff', 'y'));
@@ -213,7 +214,7 @@ async function projectPage() {
     const cat = (c) => el('button', {
       type: 'button', ariaPressed: String(!state.hidden.has(c)),
       onclick: () => { state.hidden.has(c) ? state.hidden.delete(c) : state.hidden.add(c); render(); },
-    }, el('span', { className: 'sw', style: `background:${PAL[c]}` }), cap(c));
+    }, el('span', { className: 'sw', style: `background:${catColor(c)}` }), cap(c));
     $('legend').replaceChildren(
       ...(state.tab === 'type' ? cats.map(cat) : []),
       ...(nMarkers ? [item('marker', 'Public model release')] : []),
@@ -248,7 +249,7 @@ async function projectPage() {
       const ref = e.version ?? e.sha.slice(0, 7);
       body.append(el('tr', { className: 'ev' },
         el('td', { dataset: { label: changelog ? 'Version' : 'Commit' } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
-        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${PAL[e.category]}`, textContent: e.category })),
+        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${catColor(e.category)}`, textContent: e.category })),
         el('td', { dataset: { label: 'Source' }, textContent: e.source }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
         el('td', { dataset: { label: 'Change' }, textContent: e.text })));
     }
@@ -272,7 +273,7 @@ async function projectPage() {
 
 function ORDER_CATS(keys) {
   const order = Object.keys(PAL);
-  return order.filter((c) => keys.includes(c));
+  return [...order.filter((c) => keys.includes(c)), ...keys.filter((c) => !order.includes(c))];
 }
 
 async function indexPage() {
