@@ -46,3 +46,12 @@ Measured in the Phase 0 probe runs (2026-10-14):
   hook sees the branch as unpushed and pushes a stray `claude/…` branch too.
 - `master` has no branch protection; the routine's GitHub access pushes to it
   directly.
+
+## Site
+
+Hand-written browser JS (`src/site/app.js`, `app.css`) plus Chart.js
+**4.5.1** (MIT), vendored unmodified at `docs/vendor/chart.umd.js` from the npm
+tarball. `build.js` copies the site files into `docs/`. `annotations.json` holds
+the model-release markers, each with its announcement URL. `npm run
+check:browser` builds the test fixtures into a temp dir and runs Playwright
+against them (`npx playwright install chromium` once).

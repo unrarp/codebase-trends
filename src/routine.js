@@ -73,11 +73,12 @@ async function main(argv) {
     }
   }
 
-  // Phase 3: run `npm run build` here, before check:core.
-  try {
-    run('npm', ['run', 'check:core']);
-  } catch (e) {
-    throw new Error(`check:core failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
+  for (const script of ['build', 'check:core']) {
+    try {
+      run('npm', ['run', script]);
+    } catch (e) {
+      throw new Error(`${script} failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
+    }
   }
 
   const counts = stageAndCount();

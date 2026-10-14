@@ -1,0 +1,24 @@
+[
+  {
+    "date": "2026-08-25",
+    "label": "Model A",
+    "vendor": "anthropic",
+    "kind": "model",
+    "source": "https://example.test/a"
+  },
+  {
+    "date": "2026-08-26",
+    "label": "Model B",
+    "vendor": "anthropic",
+    "kind": "model",
+    "source": "https://example.test/c"
+  },
+  {
+    "date": "2026-09-01",
+    "end": "2026-09-07",
+    "label": "Quiet week",
+    "vendor": "openai",
+    "kind": "period",
+    "source": "https://example.test/b"
+  }
+]

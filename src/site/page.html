@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{name}} · codebase-trends</title>
+<link rel="stylesheet" href="../app.css">
+</head>
+<body data-project="{{id}}" data-basis="{{basis}}">
+<main class="wrap">
+  <p class="crumb"><a href="../">codebase-trends</a> / {{name}}</p>
+  <section class="panel">
+    <div class="panel-head">
+      <div class="titles">
+        <h1 id="title">{{name}}</h1>
+        <p id="subtitle" class="sub"></p>
+      </div>
+      <div id="tabs" class="seg" role="tablist"></div>
+    </div>
+    <div id="stats" class="stats"></div>
+    <p id="meta" class="meta"></p>
+    <div id="legend" class="legend"></div>
+    <div id="controls" class="controls"></div>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div id="chips" class="chips"></div>
+    <p class="footnote">Model release dates are reference markers; proximity does not establish causation.</p>
+    <p id="updated" class="footnote"></p>
+  </section>
+  <section id="drill" class="panel" hidden>
+    <div class="panel-head">
+      <h2 id="drill-title"></h2>
+      <button id="drill-close" class="btn" type="button">Close</button>
+    </div>
+    <table id="drill-table">
+      <thead><tr><th>Version</th><th>Type</th><th>Source</th><th>Change</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p id="drill-empty" class="sub" hidden>No events in this period.</p>
+  </section>
+</main>
+<script src="../vendor/chart.umd.js"></script>
+<script src="../app.js" defer></script>
+</body>
+</html>
