@@ -8,6 +8,24 @@ import { parseChangelog } from './adapters/changelog-md.js';
 import { fetchNpmTimes } from './adapters/npm-times.js';
 import { collectGitLog, fetchGitLog } from './adapters/git-log.js';
 
+/**
+ * One line of data/<project>/events.jsonl: raw facts only, never a category.
+ * @typedef {Object} Event
+ * @property {string} id         changelog `<version>#<index>` (0-based bullet position under its header); commits `<sha>`
+ * @property {string} textHash   hash.js over project + text; the label cache key; not unique per event
+ * @property {string} project
+ * @property {'changelog'|'commit'} kind
+ * @property {string} [version]  changelog basis
+ * @property {string} [sha]      commits basis
+ * @property {string} [ts]       commits basis (committer date, ISO UTC); changelog ts comes from dates.json
+ * @property {string} text       bullet or commit subject with leading [Tag] groups stripped
+ * @property {string[]} tags     e.g. 'vscode' from [VSCode], 'regression:2.1.296', 'pr:53969'
+ * @property {string} [author]   commits basis
+ * @property {string[]} [coauthors] commits basis: Co-authored-by names
+ *
+ * data/<project>/dates.json (changelog basis): { [version]: ISO ts }, npm publish times ∪ seed/<project>-dates.json.
+ */
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RETRY = { attempts: 3, delays: [2000, 5000] };
 

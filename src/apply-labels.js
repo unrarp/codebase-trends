@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { CATEGORIES } from './classify.js';
 import { appendJsonl, readJsonl } from './store.js';
 
+/**
+ * One line of data/<project>/classifications.jsonl: a model's label for every event sharing a textHash.
+ * @typedef {{ textHash: string, category: string, model: string, ts: string }} Classification
+ */
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MODEL = 'claude-sonnet-5-5';
 export const BATCH_SIZE = 50;

@@ -4,6 +4,21 @@ import { fileURLToPath } from 'node:url';
 import { readJsonl } from './store.js';
 import { classifyByRule, CATEGORIES } from './classify.js';
 
+/*
+ * Output under docs/data/ (validate.js checks the invariants):
+ *   projects.json            [{ id, name, basis, annotations: [vendor], links }]
+ *   annotations.json         copy of annotations.json
+ *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
+ *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions?, bots? },
+ *                              medianPerReleaseDay, busiestDay: { d, n } }   versions: changelog; bots: commits
+ *   <project>/daily.json     [{ d, counts, total, fixShare, botShare? }]  every calendar day firstDate..lastDate
+ *   <project>/weekly.json    same rows, d = ISO-week Monday, every week
+ *   <project>/releases.json  [{ version, ts, count }]                    changelog basis only
+ *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, url? }]
+ * medianPerReleaseDay and busiestDay are null with no events; fixShare is null when its denominator is 0;
+ * botShare (commits only) is null when total is 0.
+ */
+
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SITE = join(REPO, 'src', 'site');
 const DAY = 86_400_000;
