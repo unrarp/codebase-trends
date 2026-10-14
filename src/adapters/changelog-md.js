@@ -6,6 +6,16 @@ export function stripTags(text, tags) {
   return text;
 }
 
+/** `regression:<version>` and `pr:<n>` tags found in tag-stripped text, in that order. */
+export function textTags(text) {
+  const tags = [];
+  const reg = text.match(/regression (?:introduced )?(?:in|since) v?(\d+\.\d+\.\d+)/i);
+  if (reg) tags.push(`regression:${reg[1]}`);
+  const pr = text.match(/\(#(\d+)\)\s*$/);
+  if (pr) tags.push(`pr:${pr[1]}`);
+  return tags;
+}
+
 /** Raw CHANGELOG.md text → Event[] (one per bullet, in file order). */
 export function parseChangelog(md, project) {
   const events = [];
@@ -22,10 +32,7 @@ export function parseChangelog(md, project) {
     const tags = [];
     let text = stripTags(line.slice(2).trim(), tags);
     text = text.replace(/^\*\*[^*]+:\*\*\s*/, '');
-    const reg = text.match(/regression (?:introduced )?(?:in|since) v?(\d+\.\d+\.\d+)/i);
-    if (reg) tags.push(`regression:${reg[1]}`);
-    const pr = text.match(/\(#(\d+)\)\s*$/);
-    if (pr) tags.push(`pr:${pr[1]}`);
+    tags.push(...textTags(text));
     events.push({
       id: `${version}#${index++}`,
       textHash: textHash(project, text),

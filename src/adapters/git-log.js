@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textHash } from '../hash.js';
 import { retry } from '../net.js';
-import { stripTags } from './changelog-md.js';
+import { stripTags, textTags } from './changelog-md.js';
 
 const RETRY = { attempts: 3, delays: [2000, 5000] };
 export const GIT_LOG_FORMAT = '%H%x1f%cI%x1f%an%x1f%ae%x1f%s%x1f%b%x1e';
@@ -20,10 +20,7 @@ export function parseGitLog(raw, project) {
     const [sha, cI, author, , subject, body = ''] = rec.replace(/^\n/, '').split('\x1f');
     const tags = [];
     const text = stripTags(subject, tags);
-    const reg = text.match(/regression (?:introduced )?(?:in|since) v?(\d+\.\d+\.\d+)/i);
-    if (reg) tags.push(`regression:${reg[1]}`);
-    const pr = text.match(/\(#(\d+)\)\s*$/);
-    if (pr) tags.push(`pr:${pr[1]}`);
+    tags.push(...textTags(text));
     const coauthors = [...body.matchAll(/^Co-authored-by:\s*(.+?)\s*(?:<[^>]*>)?\s*$/gim)].map((m) => m[1]);
     events.push({
       id: sha,
