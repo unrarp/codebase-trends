@@ -1,0 +1,7 @@
+[
+  { "id": "claude-code", "name": "Claude Code", "basis": "changelog",
+    "sources": { "changelog": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+                 "npm": "@anthropic-ai/claude-code" },
+    "links": { "release": "https://github.com/anthropics/claude-code/releases/tag/v{version}" },
+    "annotations": ["anthropic"] }
+]
