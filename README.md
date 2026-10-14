@@ -15,8 +15,10 @@ categorised: `added`, `fixed`, `changed`, `improved`, `removed`, `other`, plus
 stacked bars per week or per day, a 7-day average, the fix share
 (`(fixed + revert) / (total − chore − test − docs − ci)`), and numbered
 model-release markers. Clicking a bar lists that period's items; `#YYYY-MM-DD`
-deep-links a day. The span after the last sync is hatched "Not yet collected",
-so a stalled routine shows as a growing hatch.
+deep-links a day. The site root opens the project last viewed in that browser
+(else the first in `projects.json`); a switcher on each page changes project.
+The span after the last sync is hatched "Not yet collected", so a stalled
+routine shows as a growing hatch.
 
 Two bases, set per project in `projects.json`:
 
@@ -75,8 +77,8 @@ run commits.
    new data too) and push.
 
 Pushing the config before the backfill would make the next hourly run try to
-classify the project's whole history in one session. Pages and the index link
-are generated from config; a new project needs no code.
+classify the project's whole history in one session. Pages and the project
+switcher are generated from config; a new project needs no code.
 
 ## Quality gates
 

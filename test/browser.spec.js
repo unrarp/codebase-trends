@@ -109,11 +109,30 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await expect(page.locator('#legend')).toContainText('Context period');
     });
 
-    test('index lists the fixture projects', async ({ page }) => {
+    test('root opens the first project, then the last one viewed', async ({ page }) => {
       const errors = await open(page, '');
-      await expect(page.locator('#projects a')).toHaveCount(2);
-      await expect(page.locator('#projects a[href="./claude-code/"]')).toContainText('Claude Code');
-      await expect(page.locator('#projects a[href="./sparse/"]')).toContainText('Sparse');
+      await page.waitForURL(`${base}claude-code/`);
+      await open(page, 'sparse/');
+      await page.goto(base);
+      await page.waitForURL(`${base}sparse/`);
+      expect(errors).toEqual([]);
+    });
+
+    test('switcher lists every project and navigates to the chosen one', async ({ page }) => {
+      await open(page, 'claude-code/');
+      await expect(page.locator('#switch option')).toHaveText(['Claude Code', 'Sparse']);
+      await expect(page.locator('#switch')).toHaveValue('claude-code');
+      await page.locator('#switch').selectOption('sparse');
+      await page.waitForURL(`${base}sparse/`);
+      await expect(page.locator('#switch')).toHaveValue('sparse');
+    });
+
+    test('blocked storage still renders the page and redirects the root', async ({ page }) => {
+      await page.addInitScript(() => Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('blocked', 'SecurityError'); } }));
+      const errors = await open(page, 'sparse/');
+      await page.goto(base);
+      await page.waitForURL(`${base}claude-code/`);
+      await page.waitForFunction(() => window.__chart);
       expect(errors).toEqual([]);
     });
   });

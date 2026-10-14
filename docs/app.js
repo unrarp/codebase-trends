@@ -15,6 +15,10 @@ const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
 const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
 const cap = (s) => (s === 'ci' ? 'CI' : s[0].toUpperCase() + s.slice(1));
+const LAST = 'codebase-trends:project';
+// Storage throws when the browser blocks it; remembering the project is optional.
+const remembered = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
+const remember = (id) => { try { localStorage.setItem(LAST, id); } catch {} };
 const narrow = () => matchMedia('(max-width: 719px)').matches;
 
 async function projectPage() {
@@ -27,6 +31,9 @@ async function projectPage() {
     get(`${D}${id}/daily.json`), get(`${D}${id}/weekly.json`), changelog ? get(`${D}${id}/releases.json`) : [],
   ]);
   const vendors = projects.find((p) => p.id === id).annotations;
+  remember(id);
+  $('switch').replaceChildren(...projects.map((p) => el('option', { value: p.id, textContent: p.name, selected: p.id === id })));
+  $('switch').addEventListener('change', (e) => { location.href = `../${e.target.value}/`; });
   const now = Date.now();
   const generatedAt = Date.parse(summary.generatedAt);
   const noun = changelog ? 'Changelog items' : 'Commits';
@@ -276,15 +283,11 @@ function ORDER_CATS(keys) {
   return [...order.filter((c) => keys.includes(c)), ...keys.filter((c) => !order.includes(c))];
 }
 
+// The root has no content of its own: it opens the last project viewed, else the first configured.
 async function indexPage() {
-  const projects = await get('./data/projects.json');
-  const items = await Promise.all(projects.map(async (p) => {
-    const s = await get(`./data/${p.id}/summary.json`);
-    return el('li', {}, el('a', { href: `./${p.id}/` },
-      el('div', { className: 'name', textContent: p.name }),
-      el('div', { className: 'info', textContent: `${s.basis === 'changelog' ? 'Changelog bullets' : 'Commits'} · ${s.totals.events.toLocaleString('en-US')} · updated ${s.generatedAt.slice(0, 10)}` })));
-  }));
-  $('projects').replaceChildren(...items);
+  const ids = (await get('./data/projects.json')).map((p) => p.id);
+  const last = remembered();
+  location.replace(`./${ids.includes(last) ? last : ids[0]}/`);
 }
 
 (document.body.dataset.project ? projectPage : indexPage)();

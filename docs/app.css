@@ -5,6 +5,7 @@ a { color: #7db4ff; }
 button { font: inherit; color: inherit; cursor: pointer; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .crumb { color: var(--muted); margin: 0 0 12px; }
+.crumb select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; min-width: 0; }
 .panel-head { display: flex; flex-wrap: wrap; gap: 12px 16px; justify-content: space-between; align-items: flex-start; }
 .titles { min-width: 0; flex: 1 1 320px; }
@@ -48,16 +49,11 @@ tr.day th { background: var(--bg); color: var(--text); }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; color: #0d0f12; }
 .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 
-.projects { list-style: none; padding: 0; margin: 16px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.projects a { display: block; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); text-decoration: none; color: var(--text); }
-.projects .name { font-weight: 600; font-size: 16px; }
-.projects .info { color: var(--muted); font-size: 12px; }
-
 @media (max-width: 719px) {
   .wrap { padding: 8px; }
   .panel { padding: 14px 12px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .seg button, .btn, .legend button, .controls label { min-height: 44px; }
+  .seg button, .btn, .legend button, .controls label, .crumb select { min-height: 44px; }
   .controls label { padding: 0 6px; }
   .seg { width: 100%; }
   .seg button { flex: 1 1 auto; }
