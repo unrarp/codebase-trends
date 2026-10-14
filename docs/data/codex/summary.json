@@ -1,0 +1,35 @@
+{
+  "project": "codex",
+  "name": "Codex",
+  "basis": "commits",
+  "generatedAt": "2026-10-14T17:20:15.070Z",
+  "firstDate": "2025-04-16",
+  "lastDate": "2026-10-14",
+  "totals": {
+    "events": 12220,
+    "byCategory": {
+      "added": 3723,
+      "fixed": 3002,
+      "changed": 2088,
+      "improved": 984,
+      "removed": 378,
+      "other": 62,
+      "revert": 91,
+      "chore": 1132,
+      "test": 441,
+      "docs": 159,
+      "ci": 160
+    },
+    "bySource": {
+      "rule": 5292,
+      "model": 6928,
+      "pending": 0
+    },
+    "bots": 143
+  },
+  "medianPerReleaseDay": 19,
+  "busiestDay": {
+    "d": "2026-08-20",
+    "n": 99
+  }
+}

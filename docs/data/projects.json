@@ -9,5 +9,17 @@
     "links": {
       "release": "https://github.com/anthropics/claude-code/releases/tag/v{version}"
     }
+  },
+  {
+    "id": "codex",
+    "name": "Codex",
+    "basis": "commits",
+    "annotations": [
+      "openai"
+    ],
+    "links": {
+      "commit": "https://github.com/openai/codex/commit/{sha}",
+      "pr": "https://github.com/openai/codex/pull/{n}"
+    }
   }
 ]

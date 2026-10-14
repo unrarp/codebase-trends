@@ -3,5 +3,10 @@
     "sources": { "changelog": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
                  "npm": "@anthropic-ai/claude-code" },
     "links": { "release": "https://github.com/anthropics/claude-code/releases/tag/v{version}" },
-    "annotations": ["anthropic"] }
+    "annotations": ["anthropic"] },
+  { "id": "codex", "name": "Codex", "basis": "commits",
+    "sources": { "git": { "repo": "https://github.com/openai/codex", "branch": "main", "since": "2025-01-01" } },
+    "bots": [],
+    "links": { "commit": "https://github.com/openai/codex/commit/{sha}", "pr": "https://github.com/openai/codex/pull/{n}" },
+    "annotations": ["openai"] }
 ]

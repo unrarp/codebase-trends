@@ -13,7 +13,7 @@ const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${pa
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
 const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
-const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const cap = (s) => (s === 'ci' ? 'CI' : s[0].toUpperCase() + s.slice(1));
 const narrow = () => matchMedia('(max-width: 719px)').matches;
 
 async function projectPage() {
@@ -57,8 +57,7 @@ async function projectPage() {
   stats.push(stat(changelog ? 'Median release day' : 'Median active day', summary.medianPerReleaseDay ?? '–'));
   if (summary.busiestDay) stats.push(stat(`Busiest day (${fmt(summary.busiestDay.d)})`, summary.busiestDay.n));
   if (!changelog && summary.totals.events) {
-    const bots = dailyRaw.reduce((s, r) => s + Math.round((r.botShare ?? 0) * r.total), 0);
-    stats.push(stat('Bot-authored', `${Math.round((bots / summary.totals.events) * 100)}%`));
+    stats.push(stat('Bot-authored', `${Math.round((summary.totals.bots / summary.totals.events) * 100)}%`));
   }
   $('stats').replaceChildren(...stats);
   $('meta').textContent = `${fmt(summary.firstDate, true)} – ${fmt(summary.lastDate, true)} · UTC days · median counts ${changelog ? 'bullets on days with at least one release' : 'commits on days with at least one commit'}`;
