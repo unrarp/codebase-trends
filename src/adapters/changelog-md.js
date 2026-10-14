@@ -1,5 +1,11 @@
 import { textHash } from '../hash.js';
 
+/** Strips leading `[Tag]` groups from text, pushing each as a lowercase tag; returns the rest. */
+export function stripTags(text, tags) {
+  for (let m; (m = text.match(/^\[([^\]]+)\]\s*/)); text = text.slice(m[0].length)) tags.push(m[1].toLowerCase());
+  return text;
+}
+
 /** Raw CHANGELOG.md text → Event[] (one per bullet, in file order). */
 export function parseChangelog(md, project) {
   const events = [];
@@ -13,11 +19,8 @@ export function parseChangelog(md, project) {
       continue;
     }
     if (!version || !line.startsWith('- ')) continue;
-    let text = line.slice(2).trim();
     const tags = [];
-    for (let m; (m = text.match(/^\[([^\]]+)\]\s*/)); text = text.slice(m[0].length)) {
-      tags.push(m[1].toLowerCase());
-    }
+    let text = stripTags(line.slice(2).trim(), tags);
     text = text.replace(/^\*\*[^*]+:\*\*\s*/, '');
     const reg = text.match(/regression (?:introduced )?(?:in|since) v?(\d+\.\d+\.\d+)/i);
     if (reg) tags.push(`regression:${reg[1]}`);

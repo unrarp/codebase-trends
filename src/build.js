@@ -107,6 +107,7 @@ function buildProject(project, root, out, generatedAt) {
     byCategory: Object.fromEntries(cats.map((c) => [c, events.filter((e) => e.category === c).length])),
     bySource: Object.fromEntries(['rule', 'model', 'pending'].map((s) => [s, events.filter((e) => e.source === s).length])),
   };
+  if (project.basis === 'commits') totals.bots = events.filter((e) => e.bot).length;
   const releases = [];
   if (project.basis === 'changelog') {
     const byVersion = new Map();

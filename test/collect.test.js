@@ -71,3 +71,16 @@ test('pending = rule-null events without a classification, one line per textHash
   assert.deepEqual(lines(b.pending).map((l) => JSON.parse(l).text),
     ['Internal infrastructure improvements (no user-facing changes)']);
 });
+
+test('commits basis: collect appends parsed commits and derives pending', async () => {
+  const dataRoot = tmp();
+  const bun = { id: 'bun', basis: 'commits', sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } } };
+  const net = { gitLog: async () => fx('git-log-bun.txt') };
+  await collect([bun], { dataRoot, net });
+  const events = lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).map((l) => JSON.parse(l));
+  assert.equal(events.length, 6);
+  assert.ok(events.every((e) => e.kind === 'commit' && e.sha === e.id));
+  await collect([bun], { dataRoot, net });
+  assert.equal(lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).length, 6); // known shas skipped
+  readFileSync(join(dataRoot, 'bun', 'pending.jsonl'), 'utf8'); // derived
+});

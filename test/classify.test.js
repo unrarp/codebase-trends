@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyByRule } from '../src/classify.js';
+import { classifyByRule, CATEGORIES } from '../src/classify.js';
 import { parseChangelog } from '../src/adapters/changelog-md.js';
 
 const ev = (text) => ({ kind: 'changelog', text });
@@ -47,4 +47,39 @@ test('a leading "Scope:" lead-in is skipped to find the first word', () => {
   ].join('\n');
   const got = parseChangelog(md, 'claude-code').map((e) => classifyByRule(e, {}));
   assert.deepEqual(got, ['fixed', 'added', 'improved', null]);
+});
+
+const cm = (text, project = {}) => classifyByRule({ kind: 'commit', text }, project);
+
+const PREFIXES = { feat: 'added', fix: 'fixed', perf: 'improved', refactor: 'changed', chore: 'chore', build: 'chore', style: 'chore', test: 'test', docs: 'docs', ci: 'ci' };
+for (const [prefix, category] of Object.entries(PREFIXES)) {
+  for (const form of [`${prefix}: x`, `${prefix}(scope): x`, `${prefix}!: x`, `${prefix}(scope)!: x`]) {
+    test(`commit "${form}" -> ${category}`, () => assert.equal(cm(form), category));
+  }
+}
+
+test('commit Revert/revert -> revert, and beats first-word rules', () => {
+  assert.equal(cm('Revert "fix: x"'), 'revert');
+  assert.equal(cm('revert the thing'), 'revert');
+  assert.equal(cm('reverted x'), 'revert');
+});
+
+test('a conventional prefix beats the first-word rule', () => {
+  assert.equal(cm('docs: fix typo'), 'docs');
+  assert.equal(cm('feat: remove x'), 'added');
+});
+
+test('commit first-word fallback, incl. Scope: lead-in and project synonyms', () => {
+  assert.equal(cm('Fix crash in parser (#1)'), 'fixed');
+  assert.equal(cm('Add --flag'), 'added');
+  assert.equal(cm('Remove dead code'), 'removed');
+  assert.equal(cm('Windows: Fixed a thing'), 'fixed');
+  assert.equal(cm('Bump WebKit'), null);
+  assert.equal(cm('bundler: do x'), null);
+  assert.equal(cm('Bump WebKit', { rules: { synonyms: { bump: 'chore' } } }), 'chore');
+});
+
+test('commit rule categories stay inside CATEGORIES.commits', () => {
+  const texts = [...Object.keys(PREFIXES).map((p) => `${p}: x`), 'Revert x', 'Fix x', 'Add x', 'Improve x', 'Change x', 'Remove x'];
+  for (const t of texts) assert.ok(CATEGORIES.commits.includes(cm(t)), t);
 });

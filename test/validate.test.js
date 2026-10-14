@@ -48,3 +48,8 @@ test('rejects a missing calendar day and a missing ISO week', () => {
   const week = violationsAfter('data/sparse/weekly.json', (rows) => rows.filter((r) => r.d !== '2026-08-10'));
   assert.ok(week.some((e) => /every ISO week/.test(e)), week.join('\n'));
 });
+
+test('rejects a commits summary whose bots total is missing or out of range', () => {
+  const errs = violationsAfter('data/sparse/summary.json', (s) => { delete s.totals.bots; return s; });
+  assert.ok(errs.some((e) => /bots/.test(e)), errs.join('\n'));
+});

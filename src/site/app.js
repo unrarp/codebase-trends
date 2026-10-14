@@ -57,8 +57,7 @@ async function projectPage() {
   stats.push(stat(changelog ? 'Median release day' : 'Median active day', summary.medianPerReleaseDay ?? '–'));
   if (summary.busiestDay) stats.push(stat(`Busiest day (${fmt(summary.busiestDay.d)})`, summary.busiestDay.n));
   if (!changelog && summary.totals.events) {
-    const bots = dailyRaw.reduce((s, r) => s + Math.round((r.botShare ?? 0) * r.total), 0);
-    stats.push(stat('Bot-authored', `${Math.round((bots / summary.totals.events) * 100)}%`));
+    stats.push(stat('Bot-authored', `${Math.round((summary.totals.bots / summary.totals.events) * 100)}%`));
   }
   $('stats').replaceChildren(...stats);
   $('meta').textContent = `${fmt(summary.firstDate, true)} – ${fmt(summary.lastDate, true)} · UTC days · median counts ${changelog ? 'bullets on days with at least one release' : 'commits on days with at least one commit'}`;

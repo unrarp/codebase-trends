@@ -1,0 +1,5 @@
+3f13ebce10209ab3645f51e7606892b3fd71d47e2025-08-04T15:56:32-07:00Michael Bolinmbolin@openai.com[codex] stop printing error message when --output-last-message is not specified (#1828)Previously, `codex exec` was printing `Warning: no file to write last
+message to` as a warning to stderr even though `--output-last-message`
+was not specified, which is wrong. This fixes the code and changes
+`handle_last_message()` so that it is only called when
+`last_message_path` is `Some`.

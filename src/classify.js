@@ -19,11 +19,24 @@ function changelogRule(event, project) {
   return firstWordCategory(event.text, map) ?? firstWordCategory(event.text.replace(SCOPE, ''), map);
 }
 
+const CONVENTIONAL = /^(feat|fix|perf|refactor|chore|build|test|docs|ci|style)(\(.*\))?!?:/;
+const PREFIX_CATEGORY = {
+  feat: 'added', fix: 'fixed', perf: 'improved', refactor: 'changed',
+  chore: 'chore', build: 'chore', style: 'chore', test: 'test', docs: 'docs', ci: 'ci',
+};
+
+function commitRule(event, project) {
+  if (/^(Revert |revert)/.test(event.text)) return 'revert';
+  const m = event.text.match(CONVENTIONAL);
+  return m ? PREFIX_CATEGORY[m[1]] : changelogRule(event, project);
+}
+
 /** Rule-based category for an event, or null (residual → model). Applied at build, never stored. */
 export function classifyByRule(event, project) {
   switch (event.kind) {
     case 'changelog': return changelogRule(event, project);
-    default: return null; // commit rules arrive in Phase 5
+    case 'commit': return commitRule(event, project);
+    default: return null;
   }
 }
 

@@ -6,6 +6,7 @@ import { appendJsonl, readJsonl } from './store.js';
 import { classifyByRule } from './classify.js';
 import { parseChangelog } from './adapters/changelog-md.js';
 import { fetchNpmTimes } from './adapters/npm-times.js';
+import { collectGitLog, fetchGitLog } from './adapters/git-log.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RETRY = { attempts: 3, delays: [2000, 5000] };
@@ -34,8 +35,14 @@ async function collectChangelog(project, { dir, seedDir, net }) {
   writeFileSync(join(dir, 'dates.json'), JSON.stringify({ ...seed, ...npm }, null, 2) + '\n');
 }
 
-// Dispatch by basis; the commits basis adds an entry here.
-const BASES = { changelog: collectChangelog };
+/** Commits basis: appends first-parent commits since `sources.git.since` not already in events.jsonl. */
+async function collectCommits(project, { dir, net }) {
+  const eventsPath = join(dir, 'events.jsonl');
+  appendJsonl(eventsPath, await collectGitLog(project, readJsonl(eventsPath), net.gitLog));
+}
+
+// Dispatch by basis.
+const BASES = { changelog: collectChangelog, commits: collectCommits };
 
 /** pending.jsonl: one line per distinct textHash with no rule category and no classification. */
 function derivePending(project, dir) {
@@ -51,7 +58,7 @@ function derivePending(project, dir) {
 }
 
 /** Runs collection for every project. Paths and network are injectable for tests. */
-export async function collect(projects, { dataRoot = join(ROOT, 'data'), seedDir = join(ROOT, 'seed'), net = { fetchText, fetchJson } } = {}) {
+export async function collect(projects, { dataRoot = join(ROOT, 'data'), seedDir = join(ROOT, 'seed'), net = { fetchText, fetchJson, gitLog: fetchGitLog } } = {}) {
   for (const project of projects) {
     const dir = join(dataRoot, project.id);
     await BASES[project.basis](project, { dir, seedDir, net });

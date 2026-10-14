@@ -1,5 +1,5 @@
-{"id":"a1","textHash":"d851aceff9528eca","project":"sparse","kind":"commit","sha":"a1","ts":"2026-08-03T10:00:00+02:00","text":"fix: crash on start","tags":[],"author":"alice","coauthors":[]}
+{"id":"a1","textHash":"c3ab6dccf9db26ce","project":"sparse","kind":"commit","sha":"a1","ts":"2026-08-03T10:00:00+02:00","text":"crash on start","tags":[],"author":"alice","coauthors":[]}
 {"id":"b2","textHash":"5c126419d6449c98","project":"sparse","kind":"commit","sha":"b2","ts":"2026-08-03T23:30:00-02:00","text":"chore: bump deps","tags":[],"author":"robobun","coauthors":[]}
 {"id":"c3","textHash":"106ae73124a0e3af","project":"sparse","kind":"commit","sha":"c3","ts":"2026-08-04T12:00:00Z","text":"docs: readme","tags":[],"author":"alice","coauthors":[]}
 {"id":"d4","textHash":"ffcdb420140b09d3","project":"sparse","kind":"commit","sha":"d4","ts":"2026-08-21T09:00:00Z","text":"Revert \"add widget\"","tags":[],"author":"carol","coauthors":["ci[bot]"]}
-{"id":"e5","textHash":"2dedfaafc779bcb3","project":"sparse","kind":"commit","sha":"e5","ts":"2026-09-14T09:00:00Z","text":"feat: new thing (#12)","tags":[],"author":"dave","coauthors":[]}
+{"id":"e5","textHash":"7aaee34df8232e65","project":"sparse","kind":"commit","sha":"e5","ts":"2026-09-14T09:00:00Z","text":"widgets, now with sprockets (#12)","tags":[],"author":"dave","coauthors":[]}

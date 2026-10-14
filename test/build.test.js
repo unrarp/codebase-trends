@@ -74,8 +74,9 @@ test('sparse commits project: zero rows for gap days and weeks, UTC day shift, f
   assert.equal(d['2026-08-05'].botShare, null);
   assert.equal(weekly.find((r) => r.d === '2026-08-10').total, 0);
   const s = j('data/sparse/summary.json');
-  assert.deepEqual(s.totals.bySource, { rule: 0, model: 4, pending: 1 });
+  assert.deepEqual(s.totals.bySource, { rule: 3, model: 1, pending: 1 });
   assert.equal('versions' in s.totals, false);
+  assert.equal(s.totals.bots, 2); // robobun on 08-04 + ci[bot] co-author on 08-21
   assert.equal(existsSync(join(out, 'data/sparse/releases.json')), false);
 });
 

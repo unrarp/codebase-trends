@@ -23,8 +23,9 @@ Two bases, set per project in `projects.json`:
 - **changelog**: one item per CHANGELOG.md bullet, dated by the version's npm
   publish time (`seed/claude-code-dates.json` covers the claude-code versions
   npm never listed).
-- **commits** (being added, for Bun and Codex): one item per first-parent
-  commit on the default branch since `sources.git.since`.
+- **commits** (Bun, Codex): one item per first-parent commit on the default
+  branch since `sources.git.since`; bot share counts commits whose author or a
+  co-author is in the project's `bots` list or ends in `[bot]`.
 
 ## Data flow
 
@@ -123,5 +124,6 @@ Measured in the Phase 0 probe runs (2026-10-14):
   then the cached model label by `textHash`, else `other`/pending). Changing a
   rule relabels all history on the next build with no migration.
 - **Collection state is derived, not stored.** The changelog basis collects
-  versions not yet in `events.jsonl`; the commits basis resumes from the latest
-  event `ts`. A bullet edited under an already-collected version is ignored.
+  versions not yet in `events.jsonl`; the commits basis re-reads history since
+  `sources.git.since` (a blob-less clone takes seconds) and skips known shas.
+  A bullet edited under an already-collected version is ignored.

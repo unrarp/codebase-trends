@@ -40,6 +40,7 @@ export function validate(out) {
       bad(`${dir}/summary.json`, 'bad shape');
       continue;
     }
+    if (p.basis === 'commits' && !(Number.isInteger(totals.bots) && totals.bots >= 0 && totals.bots <= totals.events)) bad(`${dir}/summary.json`, 'totals.bots missing or out of range');
     if (sum(Object.values(totals.byCategory)) !== totals.events) bad(`${dir}/summary.json`, 'byCategory does not sum to events');
     if (sum(Object.values(totals.bySource)) !== totals.events) bad(`${dir}/summary.json`, 'bySource does not sum to events');
 
