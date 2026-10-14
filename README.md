@@ -62,6 +62,11 @@ run commits.
   serving the last successful commit.
 - **Saved prompt:** a stub that only says to follow `ROUTINE.md`, so behaviour
   changes are commits.
+- **Cloud environment:** the default network allowlist reaches the npm
+  registry and GitHub; `hc-ping.com` must be added to the routine's
+  environment. A session runs on a `claude/…` branch with no local `master`,
+  so the script pushes `HEAD:master`, and `ROUTINE.md` tells the agent not to
+  push the session branch its stop hook reports as unpushed.
 - **Local backfill:** `scripts/classify-local.sh <project>` collects and labels
   pending events with local `claude -p` (env `JOBS` parallel batches, default 4;
   `LIMIT` only the first N batches). A failing batch is reported and the rest
@@ -101,20 +106,6 @@ Hand-written browser JS (`src/site/app.js`, `app.css`) plus Chart.js
 **4.5.1** (MIT), vendored unmodified at `docs/vendor/chart.umd.js` from the npm
 tarball. `build.js` copies the site files into `docs/`. `annotations.json` holds
 the model-release markers, each with its announcement URL.
-
-## Cloud environment notes
-
-Measured in the Phase 0 probe runs (2026-10-14):
-
-- The default network allowlist reaches `registry.npmjs.org`,
-  `raw.githubusercontent.com` and `github.com` (a `--shallow-since` clone of
-  bun takes ~2 s); `hc-ping.com` must be added to the routine's environment.
-- A routine session runs on a `claude/…` branch with no local `master`, so
-  pushes use `git push -u origin HEAD:master`. The session's stop hook still
-  reports that branch as unpushed; `ROUTINE.md` tells the agent not to push
-  it, which stops a stray `claude/…` branch appearing every run.
-- `master` has no branch protection; the routine's GitHub access pushes to it
-  directly.
 
 ## Design notes
 
