@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES } from './classify.js';
-import { eachDay, mondayOf, fixShare } from './build.js';
+import { eachDay, mondayOf } from './build.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
@@ -50,8 +50,6 @@ export function validate(out) {
         if (!DATE.test(r.d) || !r.counts || typeof r.total !== 'number') { bad(w, 'bad row shape'); continue; }
         if (sum(Object.values(r.counts)) !== r.total) bad(w, 'counts do not sum to total');
         if (Object.keys(r.counts).some((c) => !cats.includes(c))) bad(w, 'category outside basis set');
-        const want = fixShare(r.counts, r.total);
-        if (r.fixShare !== want) bad(w, `fixShare ${r.fixShare} != recomputed ${want} (must be null iff denominator is 0)`);
       }
       if (sum(rows.map((r) => r.total)) !== totals.events) bad(f, `Σ total ${sum(rows.map((r) => r.total))} != summary.totals.events ${totals.events}`);
     }

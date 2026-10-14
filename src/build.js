@@ -10,17 +10,16 @@ import { classifyByRule, CATEGORIES } from './classify.js';
  *   annotations.json         copy of annotations.json
  *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
  *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions? } }   versions: changelog
- *   <project>/daily.json     [{ d, counts, total, fixShare }]  every calendar day firstDate..lastDate
+ *   <project>/daily.json     [{ d, counts, total }]  every calendar day firstDate..lastDate
  *   <project>/weekly.json    same rows, d = ISO-week Monday, every week
  *   <project>/releases.json  [{ version, ts, count }]                    changelog basis only
  *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, url? }]
- * fixShare is null when its denominator is 0.
+ * Ratios such as the site's Fixes % are derived in the browser from counts, never stored.
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SITE = join(REPO, 'src', 'site');
 const DAY = 86_400_000;
-const NON_WORK = ['chore', 'test', 'docs', 'ci'];
 
 /** Monday (YYYY-MM-DD) of the ISO week containing day d. */
 export function mondayOf(d) {
@@ -35,12 +34,6 @@ export function eachDay(from, to, step = 1) {
     out.push(new Date(t).toISOString().slice(0, 10));
   }
   return out;
-}
-
-/** (fixed + revert) / (total − chore − test − docs − ci), 4 decimals; null when the denominator is 0. */
-export function fixShare(counts, total) {
-  const denom = total - NON_WORK.reduce((s, c) => s + (counts[c] ?? 0), 0);
-  return denom === 0 ? null : Math.round((((counts.fixed ?? 0) + (counts.revert ?? 0)) / denom) * 1e4) / 1e4;
 }
 
 /** Commits basis: author or any co-author is in project.bots or ends with "[bot]". */
@@ -89,7 +82,7 @@ function aggregate(events, project, keyOf, keys) {
     r.counts[e.category]++;
     r.total++;
   }
-  return [...by.values()].map(({ d, counts, total }) => ({ d, counts, total, fixShare: fixShare(counts, total) }));
+  return [...by.values()];
 }
 
 function buildProject(project, root, out, generatedAt) {

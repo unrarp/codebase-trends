@@ -1,18 +1,16 @@
 (() => {
-// Display groups in stack and legend order. The six identity colours are dataviz reference dark-palette steps in
-// an order where every adjacent pair passes the CVD and normal-vision checks on the panel surface; Other is a
-// neutral gray on top because it carries no identity.
+// The four product-change buckets, in stack and legend order (dataviz reference dark-palette steps; every adjacent
+// pair passes the CVD and normal-vision checks on the panel surface). Any category outside them — maintenance
+// (chore, test, docs, ci), other, or one the build adds later — is not a product change and is not counted.
+// Changing a colour or the order: re-run the dataviz skill's validate_palette.js with the new hex list in this
+// order, `--mode dark --surface '#12151a'`, and keep only an order that passes (stack gaps cover a CVD WARN).
 const GROUPS = [
-  { key: 'fixed', color: '#3987e5', cats: ['fixed'] },
-  { key: 'maintenance', color: '#199e70', cats: ['chore', 'test', 'docs', 'ci'] },
   { key: 'changed', color: '#c98500', cats: ['changed', 'improved'] },
-  { key: 'revert', color: '#d55181', cats: ['revert'] },
+  { key: 'fixed', color: '#3987e5', cats: ['fixed'] },
   { key: 'added', color: '#008300', cats: ['added'] },
-  { key: 'removed', color: '#e66767', cats: ['removed'] },
-  { key: 'other', color: '#8a8f98', cats: ['other'] },
+  { key: 'removed', color: '#e66767', cats: ['removed', 'revert'] },
 ];
-const groupOf = (cat) => GROUPS.find((g) => g.cats.includes(cat)) ?? GROUPS.find((g) => g.key === 'other');
-const MAINT = GROUPS.find((g) => g.key === 'maintenance').cats;
+const groupOf = (cat) => GROUPS.find((g) => g.cats.includes(cat)) ?? null;
 const ACCENT = '#e8702a';
 const MARKER = '#f0932b';
 const PANEL = '#12151a';
@@ -39,9 +37,10 @@ const narrow = () => matchMedia('(max-width: 719px)').matches;
 
 const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
 const fixes = (r) => (r.counts.fixed ?? 0) + (r.counts.revert ?? 0);
-const work = (r) => r.total - sum(MAINT, (c) => r.counts[c] ?? 0);
-/** Pooled fix share over rows; null when nothing but maintenance landed. */
-const pooledFix = (rows) => { const d = sum(rows, work); return d === 0 ? null : sum(rows, fixes) / d; };
+/** Product changes in a row: every category that belongs to a group. */
+const shown = (r) => sum(Object.keys(r.counts), (c) => (groupOf(c) ? r.counts[c] : 0));
+/** Pooled fix share over rows; null when no product change landed. */
+const pooledFix = (rows) => { const d = sum(rows, shown); return d === 0 ? null : sum(rows, fixes) / d; };
 
 async function projectPage() {
   const id = document.body.dataset.project;
@@ -67,10 +66,10 @@ async function projectPage() {
   const anchor = Date.parse(`${rows[0].d}T00:00:00Z`);
   const end = anchor + rows.length * WEEK;
   const curIdx = rows.findIndex((r) => { const t = Date.parse(`${r.d}T00:00:00Z`); return t <= now && now < t + WEEK; });
-  const catsOf = (g) => Object.keys(summary.totals.byCategory).filter((c) => groupOf(c) === g); // includes categories GROUPS never named
+  const catsOf = (g) => Object.keys(summary.totals.byCategory).filter((c) => groupOf(c) === g);
   const groups = GROUPS.filter((g) => catsOf(g).length);
-
-  $('meta').textContent = `updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${summary.totals.events.toLocaleString('en-US')} ${noun.toLowerCase()}`;
+  const counted = sum(Object.entries(summary.totals.byCategory), ([c, n]) => (groupOf(c) ? n : 0));
+  const setAside = summary.totals.events - counted;
 
   // ---- KPIs: the last ROLL complete weeks (fewer when the history is shorter), against the ROLL weeks before ----
   const kpiEnd = curIdx < 0 ? rows.length : curIdx;
@@ -78,8 +77,9 @@ async function projectPage() {
   const ref = kpiEnd >= 2 * ROLL ? rows.slice(kpiEnd - 2 * ROLL, kpiEnd - ROLL) : []; // the ROLL weeks right before
   const inWeeks = (ws) => releases.filter((r) => r.ts.slice(0, 10) >= ws[0].d && r.ts.slice(0, 10) <= weekEnd(ws.at(-1).d)).length;
   const perWeek = (f) => (ws) => (ws.length ? f(ws) / ws.length : null);
-  const NOTES = ['window', 'fix', 'markers'];
+  const NOTES = ['counted', 'window', 'fix', 'markers'];
   const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
+  $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
   const FIX = 'Fixes %';
   const sign = (x) => (x > 0 ? '+' : x < 0 ? '−' : '±');
   const change = (a, b, share) => { // rounded first, so a change that rounds to 0 reads ±0
@@ -88,20 +88,23 @@ async function projectPage() {
     return `${sign(d)}${Math.abs(d)}${share ? ' pts' : '%'}`;
   };
   const kpis = [
-    { k: `${noun} / week`, f: perWeek((ws) => sum(ws, (r) => r.total)), show: (v) => v.toFixed(0) },
+    { k: `${noun} / week`, f: perWeek((ws) => sum(ws, shown)), show: (v) => v.toFixed(0), noteCounted: true },
     { k: 'New features / week', f: perWeek((ws) => sum(ws, (r) => r.counts.added ?? 0)), show: (v) => v.toFixed(0) },
     { k: FIX, f: pooledFix, show: pct, share: true },
     ...(changelog ? [{ k: 'Versions released / week', f: perWeek(inWeeks), show: (v) => v.toFixed(1) }] : []),
   ];
-  $('kpis').replaceChildren(...kpis.map(({ k, f, show, share }) => {
+  $('kpis').replaceChildren(...kpis.map(({ k, f, show, share, noteCounted }) => {
     const a = last.length ? f(last) : null;
     const b = ref.length ? f(ref) : null;
     const vs = a == null || b == null ? ['no prior period to compare'] : [el('b', { textContent: change(a, b, share) }), ` vs prior period (${show(b)})`];
-    return el('div', { className: 'kpi' }, el('div', { className: 'k' }, k, fn('window'), ...(share ? [fn('fix')] : [])),
+    return el('div', { className: 'kpi' }, el('div', { className: 'k' }, k, ...(noteCounted ? [fn('counted')] : []), fn('window'), ...(share ? [fn('fix')] : [])),
       el('div', { className: 'v', textContent: a == null ? '–' : show(a) }), el('div', { className: 'ref' }, ...vs));
   }));
+  const aside = changelog ? 'items that announce rather than change something' : 'maintenance commits (chores, tests, docs, CI) and unreadable subjects';
+  $('fn-counted').textContent = `Counted ${noun.toLowerCase()} are those that added, fixed, changed (incl. improved) or removed something (incl. reverts). `
+    + `Not counted: ${setAside.toLocaleString('en-US')} ${aside}.`;
   $('fn-window').textContent = `Per-week averages over the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''}; the prior period is the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
-  $('fn-fix').textContent = `${FIX}: fixes as a share of changes, (fixed + reverts) ÷ (${noun.toLowerCase()} − maintenance). The chart line is its trailing ${ROLL}-week average, each week with the ${ROLL - 1} before it.`;
+  $('fn-fix').textContent = `${FIX}: fixes as a share of changes, (fixed + reverts) ÷ all counted ${noun.toLowerCase()}. The chart line is its trailing ${ROLL}-week average, each week with the ${ROLL - 1} before it.`;
 
   // ---- shared chart furniture: context periods, not-yet-collected hatch, model markers ----
   const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.end ?? a.date) + DAY > anchor;
@@ -219,7 +222,7 @@ async function projectPage() {
           callbacks: {
             title: weekTitle,
             label: (it) => `${it.dataset.label}: ${it.dataset.label === FIX ? pct(it.parsed.y) : it.parsed.y}`,
-            footer: (items) => `Total: ${rows[items[0].dataIndex].total}`,
+            footer: (items) => `Total: ${shown(rows[items[0].dataIndex])}`,
           },
         },
       },
@@ -254,24 +257,27 @@ async function projectPage() {
     const to = view === 'week' ? dayOf(Date.parse(`${d}T00:00:00Z`) + 6 * DAY) : d;
     const months = [...new Set(dailyRaw.filter((r) => r.d >= d && r.d <= to && r.total > 0).map((r) => r.d.slice(0, 7)))];
     const events = (await Promise.all(months.map((m) => get(`${D}${id}/months/${m}.json`)))).flat()
-      .filter((e) => e.ts.slice(0, 10) >= d && e.ts.slice(0, 10) <= to);
-    $('drill-title').textContent = `${view === 'week' ? `Week of ${fmt(d, true)}` : fmt(d, true)} · ${events.length} events`;
+      .filter((e) => e.ts.slice(0, 10) >= d && e.ts.slice(0, 10) <= to && groupOf(e.category)); // the list matches the bar
+    const what = noun.toLowerCase();
+    $('drill-title').textContent = `${view === 'week' ? `Week of ${fmt(d, true)}` : fmt(d, true)} · ${events.length} ${what}`;
     const body = $('drill-table').tBodies[0];
     body.replaceChildren();
     let lastDay;
     for (const e of events) {
       const day = e.ts.slice(0, 10);
       if (view === 'week' && day !== lastDay) {
-        body.append(el('tr', { className: 'day' }, el('th', { colSpan: 4, textContent: `${fmt(day, true)} · ${events.filter((x) => x.ts.startsWith(day)).length} events` })));
+        body.append(el('tr', { className: 'day' }, el('th', { colSpan: 4, textContent: `${fmt(day, true)} · ${events.filter((x) => x.ts.startsWith(day)).length} ${what}` })));
         lastDay = day;
       }
       const ref = e.version ?? e.sha.slice(0, 7);
+      const group = groupOf(e.category); // never null: the filter above kept only grouped events
       body.append(el('tr', { className: 'ev' },
         el('td', { dataset: { label: changelog ? 'Version' : 'Commit' } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
-        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${groupOf(e.category).color}`, textContent: e.category })),
+        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${group.color}`, textContent: e.category })), // stored label, bucket colour
         el('td', { dataset: { label: 'Source' }, textContent: e.source }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
         el('td', { dataset: { label: 'Change' }, textContent: e.text })));
     }
+    $('drill-empty').textContent = `No counted ${what} in this period.`;
     $('drill-empty').hidden = events.length > 0;
     $('drill-table').hidden = events.length === 0;
     $('drill').hidden = false;

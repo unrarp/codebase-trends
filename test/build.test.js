@@ -35,16 +35,15 @@ test('summary: totals, versions, bySource has rule, model and pending; undated v
   assert.equal(releases.some((r) => r.version === '2.1.226'), false);
 });
 
-test('daily: every calendar day to today, totals add up, fixShare', () => {
+test('daily: every calendar day to today, totals add up, no derived ratios stored', () => {
   const daily = j('data/claude-code/daily.json');
   assert.deepEqual(daily.map((r) => r.d), eachDay('2026-07-03', '2026-10-14'));
   assert.equal(sum(daily.map((r) => r.total)), 17);
   const d = Object.fromEntries(daily.map((r) => [r.d, r]));
   assert.equal(d['2026-08-31'].total, 4);
-  assert.equal(d['2026-08-31'].fixShare, 1);
-  assert.equal(d['2026-08-19'].fixShare, 0.5); // fixed + added
+  assert.deepEqual(d['2026-08-31'].counts, { added: 0, fixed: 4, changed: 0, improved: 0, removed: 0, other: 0 });
   assert.equal(d['2026-10-14'].total, 0); // zero row up to today
-  assert.equal(d['2026-10-14'].fixShare, null);
+  assert.ok(daily.every((r) => !('fixShare' in r) && !('botShare' in r))); // rows carry counts only
   assert.ok(daily.every((r) => !('botShare' in r) && !('regressions' in r))); // rows carry only what the site reads
 });
 
@@ -58,7 +57,7 @@ test('weekly: every ISO week keyed by Monday, totals add up', () => {
   assert.equal(weekly.find((r) => r.d === '2026-08-31').total, 7); // Mon 08-31 (4) + 09-01 (2) + Sun 09-06 (1)
 });
 
-test('sparse commits project: zero rows for gap days and weeks, UTC day shift, fixShare null', () => {
+test('sparse commits project: zero rows for gap days and weeks, UTC day shift', () => {
   const daily = j('data/sparse/daily.json');
   const weekly = j('data/sparse/weekly.json');
   assert.deepEqual(daily.map((r) => r.d), eachDay('2026-08-03', '2026-10-14'));
@@ -67,9 +66,8 @@ test('sparse commits project: zero rows for gap days and weeks, UTC day shift, f
   const d = Object.fromEntries(daily.map((r) => [r.d, r]));
   assert.equal(d['2026-08-03'].total, 1); // 23:30-02:00 on the 3rd is 01:30Z on the 4th
   assert.equal(d['2026-08-04'].total, 2);
-  assert.equal(d['2026-08-04'].fixShare, null); // chore + docs only → denominator 0
-  assert.equal(d['2026-08-05'].fixShare, null);
-  assert.equal(d['2026-08-21'].fixShare, 1); // revert counts as a fix
+  assert.equal(d['2026-08-04'].counts.chore + d['2026-08-04'].counts.docs, 2); // maintenance only
+  assert.equal(d['2026-08-21'].counts.revert, 1);
   assert.ok(daily.concat(weekly).every((r) => !('botShare' in r)));
   assert.equal(weekly.find((r) => r.d === '2026-08-10').total, 0);
   const s = j('data/sparse/summary.json');

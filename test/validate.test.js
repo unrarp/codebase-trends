@@ -32,16 +32,6 @@ test('rejects Σ daily.total != summary.totals.events', () => {
   assert.ok(errs.some((e) => /daily\.json: Σ total/.test(e)), errs.join('\n'));
 });
 
-test('rejects fixShare null with a non-zero denominator', () => {
-  const errs = violationsAfter('data/claude-code/daily.json', (rows) => { rows.find((r) => r.total > 0).fixShare = null; return rows; });
-  assert.ok(errs.some((e) => /fixShare null != recomputed/.test(e)), errs.join('\n'));
-});
-
-test('rejects a numeric fixShare with a zero denominator', () => {
-  const errs = violationsAfter('data/sparse/daily.json', (rows) => { rows.find((r) => r.total === 0).fixShare = 0; return rows; });
-  assert.ok(errs.some((e) => /fixShare 0 != recomputed null/.test(e)), errs.join('\n'));
-});
-
 test('rejects a missing calendar day and a missing ISO week', () => {
   const day = violationsAfter('data/claude-code/daily.json', (rows) => rows.filter((r) => r.d !== '2026-07-10'));
   assert.ok(day.some((e) => /every calendar day/.test(e)), day.join('\n'));

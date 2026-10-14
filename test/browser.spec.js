@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,16 +126,13 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       const weekly = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'));
       const c = (r, k) => r.counts[k] ?? 0;
       const pooled = (rows) => {
-        const den = rows.reduce((s, r) => s + r.total - ['chore', 'test', 'docs', 'ci'].reduce((a, k) => a + c(r, k), 0), 0);
+        const den = rows.reduce((s, r) => s + ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'].reduce((a, k) => a + c(r, k), 0), 0); // the four counted buckets
         return den === 0 ? null : rows.reduce((s, r) => s + c(r, 'fixed') + c(r, 'revert'), 0) / den;
       };
       const want = weekly.map((_, i) => pooled(weekly.slice(Math.max(0, i - 3), i + 1)));
       expect(fix.v.length).toBe(want.length);
-      // the fixture's final 4 weeks hold nothing but zero rows, so the last value is null; compare the last non-null one too
-      const lastIdx = want.findLastIndex((v) => v !== null);
-      expect(lastIdx).toBeGreaterThan(0);
-      expect(fix.v[lastIdx]).toBeCloseTo(want[lastIdx], 10);
-      expect(fix.v.at(-1)).toBe(want.at(-1));
+      expect(want.filter((v) => v !== null && v !== 0).length).toBeGreaterThan(0); // the fixture has weeks where the denominator matters
+      want.forEach((w, i) => (w === null ? expect(fix.v[i]).toBeNull() : expect(fix.v[i]).toBeCloseTo(w, 10)));
     });
 
     test('narrow screens scroll the chart to the latest week with the count axis on the right', async ({ page }) => {
@@ -144,7 +141,7 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await page.route('**/data/claude-code/weekly.json', async (route) => {
         const res = await route.fetch();
         const w = await res.json();
-        const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0, fixShare: null }));
+        const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
         await route.fulfill({ response: res, json: [...pad, ...w] });
       });
       await open(page, 'claude-code/');
@@ -197,11 +194,11 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
   });
 }
 
-test('a category without a palette colour is folded into Other, counts included', async ({ page }) => {
+test('a category outside the four buckets is not drawn and not counted, and the note says so', async ({ page }) => {
   await page.route('**/data/claude-code/summary.json', async (route) => {
     const res = await route.fetch();
     const s = await res.json();
-    s.totals.byCategory.mystery = 5;
+    s.totals.byCategory.mystery = 5; s.totals.events += 5;
     await route.fulfill({ response: res, json: s });
   });
   await page.route('**/data/claude-code/weekly.json', async (route) => {
@@ -211,11 +208,36 @@ test('a category without a palette colour is folded into Other, counts included'
     await route.fulfill({ response: res, json: w });
   });
   const errors = await open(page, 'claude-code/');
-  await expect(page.locator('#legend')).not.toContainText('Mystery');
-  expect(await page.evaluate(() => __chart.data.datasets.some((d) => d.label === 'Mystery'))).toBe(false);
-  const other = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'))[0].counts.other ?? 0;
-  expect(await page.evaluate(() => __chart.data.datasets.find((d) => d.label === 'Other').data[0])).toBe(other + 5);
+  await expect(page.locator('#legend')).toHaveText(/^ChangedFixedAddedRemoved/);
+  const first = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'))[0].counts;
+  const counted = ['added', 'fixed', 'changed', 'improved', 'removed'].reduce((s, k) => s + (first[k] ?? 0), 0);
+  expect(await page.evaluate(() => __chart.data.datasets.filter((d) => !d.type).reduce((s, d) => s + d.data[0], 0))).toBe(counted); // mystery and other excluded
+  const other = JSON.parse(readFileSync(join(out, 'data/claude-code/summary.json'), 'utf8')).totals.byCategory.other;
+  await expect(page.locator('#fn-counted')).toContainText(`Not counted: ${5 + other} items that announce rather than change something`); // 5 mystery + the fixture's other
+  const events = JSON.parse(readFileSync(join(out, 'data/claude-code/summary.json'), 'utf8')).totals.events;
+  await expect(page.locator('#meta')).toContainText(`${events + 5 - other - 5} changelog items`); // header counts only the four buckets
   expect(errors).toEqual([]);
+});
+
+test('the week list and tooltip total exclude set-aside items and label rows by stored category', async ({ page }) => {
+  const months = readdirSync(join(out, 'data/claude-code/months')).map((f) => JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8'))).flat();
+  const monday = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10); };
+  const byWeek = Map.groupBy(months, (e) => monday(e.ts.slice(0, 10)));
+  const [week, evs] = [...byWeek].find(([, es]) => es.some((e) => e.category === 'other') && es.some((e) => e.category !== 'other')); // a week with both kinds
+  const counted = evs.filter((e) => e.category !== 'other').length;
+  await open(page, 'claude-code/');
+  await page.locator('#chart').scrollIntoViewIfNeeded();
+  const { x, y, total } = await page.evaluate((week) => {
+    const i = __chart.data.labels.indexOf(week);
+    const box = __chart.canvas.getBoundingClientRect();
+    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, total: __chart.options.plugins.tooltip.callbacks.footer([{ dataIndex: i }]) };
+  }, week);
+  expect(total).toBe(`Total: ${counted}`); // tooltip total matches the stack, not the stored row total
+  await page.mouse.click(x, y);
+  await expect(page.locator('#drill')).toBeVisible();
+  await expect(page.locator('#drill-title')).toContainText(`${counted} changelog items`);
+  expect(await page.locator('#drill tbody tr.ev').count()).toBe(counted);
+  await expect(page.locator('#drill tbody .tag', { hasText: 'other' })).toHaveCount(0);
 });
 
 test('fewer than four complete weeks: the note names the shorter window', async ({ page }) => {
@@ -234,7 +256,7 @@ test('resizing across the breakpoint moves the count axis and scrolls to the lat
   await page.route('**/data/claude-code/weekly.json', async (route) => {
     const res = await route.fetch();
     const w = await res.json();
-    const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0, fixShare: null }));
+    const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
     await route.fulfill({ response: res, json: [...pad, ...w] });
   });
   await open(page, 'claude-code/');

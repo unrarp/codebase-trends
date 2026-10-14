@@ -11,21 +11,24 @@ collects data, commits it to this repo, and GitHub Pages serves `docs/`.
 
 Per project, every change item is counted in the UTC week it shipped and
 categorised: `added`, `fixed`, `changed`, `improved`, `removed`, `other`, plus
-`revert`, `chore`, `test`, `docs`, `ci` for commit-based projects. Every project
-page shows the same three things, so projects compare on one footing:
+`revert`, `chore`, `test`, `docs`, `ci` for commit-based projects. The site
+shows four buckets: Added, Fixed, Changed (`changed` + `improved`) and Removed
+(`removed` + `revert`). Everything else (`other`, `chore`, `test`, `docs`,
+`ci`) is not a product change and is not counted anywhere; a note on the page
+says how many items were set aside. Every project page shows the same things,
+so projects compare on one footing:
 
 1. **KPI tiles**: items per week, new features (`added`) per week, fixes as a
    percentage of changes ("Fixes %"), and (changelog basis) versions released per
    week, averaged over the last 4 complete weeks, each with its signed change
    vs the 4 weeks before underneath.
-   One note under the chart defines the windows and the formula; the tiles
-   and the chart legend link to it.
-2. **One chart**: items per week by type as stacked bars, with the 4-week
-   rolling fix share, `(fixed + revert) / (total − chore − test − docs − ci)`,
-   drawn over them on a right-hand 0–100% axis. `improved` is shown as
-   `changed`; `chore`, `test`, `docs` and `ci` are one "maintenance" colour.
-   Clicking a week lists its items; `#YYYY-MM-DD` deep-links a day's list. On
-   narrow screens the chart scrolls sideways and opens at the latest week.
+   Numbered notes under the chart define what is counted, the windows and
+   the formula; the header, tiles and legend link to them.
+2. **One chart**: counted items per week by bucket as stacked bars, with the
+   4-week rolling fix share, `(fixed + revert) / counted items`, drawn over
+   them on a right-hand 0–100% axis. Clicking a week lists its counted items;
+   `#YYYY-MM-DD` deep-links a day's list. On narrow screens the chart scrolls
+   sideways and opens at the latest week.
 
 Only model releases flagged `major` in `annotations.json` are drawn, as
 numbered markers; the other entries stay in the file unused. The site root opens the
