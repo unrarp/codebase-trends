@@ -47,10 +47,11 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
 
     test('loads with no console errors, bars drawn, causation footnote', async ({ page }) => {
       const errors = await open(page, 'claude-code/');
-      await expect(page.locator('#stats .stat')).toHaveCount(4);
+      await expect(page.locator('#kpis .kpi')).toHaveCount(4);
       const bars = await page.evaluate(() => __chart.getDatasetMeta(0).data.length);
       expect(bars).toBeGreaterThan(0);
-      await expect(page.getByText('Model release dates are reference markers; proximity does not establish causation.')).toBeVisible();
+      await expect(page.locator('#fn-markers')).toContainText('proximity does not establish causation');
+      await expect(page.locator('#fn-window')).toContainText('Weeks start Monday 00:00 UTC');
       expect(errors).toEqual([]);
     });
 
@@ -58,7 +59,7 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await open(page, 'claude-code/');
       await page.locator('#chart').scrollIntoViewIfNeeded();
       const { x, y } = await page.evaluate(() => {
-        const rows = __chart.data.datasets.map((d) => d.data);
+        const rows = __chart.data.datasets.filter((d) => d.type !== 'line').map((d) => d.data);
         const totals = rows[0].map((_, i) => rows.reduce((s, r) => s + r[i], 0));
         const i = totals.indexOf(Math.max(...totals));
         const box = __chart.canvas.getBoundingClientRect();
@@ -79,27 +80,85 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
 
     test('3-day-old generatedAt renders a hatched region covering those days', async ({ page }) => {
       await open(page, 'claude-code/', NOW + 3 * 86_400_000);
-      await page.getByRole('button', { name: 'Per day' }).click();
       const { width } = await page.evaluate(() => __chart.$hatch);
-      expect(Math.abs(width - 3 * (await slot(page)))).toBeLessThan(1);
+      expect(Math.abs(width - (3 / 7) * (await slot(page)))).toBeLessThan(1);
+      await expect(page.locator('#legend-hatch')).toBeVisible();
     });
 
     test('fresh data has no hatched region beyond the current day', async ({ page }) => {
       await open(page, 'claude-code/');
-      await page.getByRole('button', { name: 'Per day' }).click();
       expect((await page.evaluate(() => __chart.$hatch)).width).toBeLessThan(await slot(page));
+      await expect(page.locator('#legend-hatch')).toBeHidden();
     });
 
     test('model markers days apart do not collide', async ({ page }) => {
       await open(page, 'claude-code/');
       const m = await page.evaluate(() => __chart.$markers);
-      expect(m.map((k) => k.n)).toEqual([1, 2]);
-      if (mobile) return expect(m.every((k) => k.y === null)).toBe(true); // lines only below 720px
-      expect(Math.hypot(m[0].x - m[1].x, m[0].y - m[1].y)).toBeGreaterThanOrEqual(18);
-      await page.getByRole('button', { name: 'Per day' }).click();
-      const d = await page.evaluate(() => __chart.$markers);
-      expect(Math.hypot(d[0].x - d[1].x, d[0].y - d[1].y)).toBeGreaterThanOrEqual(18);
-      await expect(page.locator('#chips .chip')).toHaveCount(2);
+      expect(m.map((k) => k.n)).toEqual([1]);
+      // only major annotations get a chip; the fixture's Model B is minor and openai's period is not in view
+      expect(await page.locator('#chips .chip').count()).toBe(1);
+      expect(await page.locator('#chips .chip .date').first().isVisible()).toBe(!mobile); // dates only on wide screens
+      await expect(page.locator('#legend')).toContainText('Major model release');
+      expect(m[0].y).not.toBeNull(); // badges are drawn in both viewports
+    });
+
+    test('sparse commits project shows three KPI tiles', async ({ page }) => {
+      await open(page, 'sparse/');
+      await expect(page.locator('#kpis .kpi')).toHaveCount(3);
+    });
+
+    test('KPI tiles name the window and compare with the prior period', async ({ page }) => {
+      await open(page, 'claude-code/');
+      await expect(page.locator('#fn-window')).toContainText('last 4 complete weeks');
+      await expect(page.locator('#fn-fix')).toContainText('Fixes %');
+      const refs = page.locator('#kpis .kpi .ref');
+      expect(await refs.count()).toBe(4);
+      for (const t of await refs.allTextContents()) expect(t).toContain('vs prior period');
+    });
+
+    test('fix share line is the 4-week pooled share of the weekly rows', async ({ page }) => {
+      await open(page, 'claude-code/');
+      const fix = await page.evaluate(() => { const d = __chart.data.datasets.find((x) => x.label === 'Fixes %'); return { axis: d.yAxisID, v: d.data }; });
+      expect(fix.axis).toBe('y1');
+      const vals = fix.v.filter((v) => v !== null);
+      expect(vals.length).toBeGreaterThan(0);
+      expect(vals.every((v) => v >= 0 && v <= 1)).toBe(true);
+      const weekly = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'));
+      const c = (r, k) => r.counts[k] ?? 0;
+      const pooled = (rows) => {
+        const den = rows.reduce((s, r) => s + r.total - ['chore', 'test', 'docs', 'ci'].reduce((a, k) => a + c(r, k), 0), 0);
+        return den === 0 ? null : rows.reduce((s, r) => s + c(r, 'fixed') + c(r, 'revert'), 0) / den;
+      };
+      const want = weekly.map((_, i) => pooled(weekly.slice(Math.max(0, i - 3), i + 1)));
+      expect(fix.v.length).toBe(want.length);
+      // the fixture's final 4 weeks hold nothing but zero rows, so the last value is null; compare the last non-null one too
+      const lastIdx = want.findLastIndex((v) => v !== null);
+      expect(lastIdx).toBeGreaterThan(0);
+      expect(fix.v[lastIdx]).toBeCloseTo(want[lastIdx], 10);
+      expect(fix.v.at(-1)).toBe(want.at(-1));
+    });
+
+    test('narrow screens scroll the chart to the latest week with the count axis on the right', async ({ page }) => {
+      test.skip(!mobile, 'mobile only');
+      // the fixture spans too few weeks to overflow 375px at 12px a week, so pad 40 empty weeks before it
+      await page.route('**/data/claude-code/weekly.json', async (route) => {
+        const res = await route.fetch();
+        const w = await res.json();
+        const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0, fixShare: null }));
+        await route.fulfill({ response: res, json: [...pad, ...w] });
+      });
+      await open(page, 'claude-code/');
+      const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft, pos: __chart.scales.y.position }; });
+      expect(m.sw).toBeGreaterThan(m.cw);
+      expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
+      expect(m.pos).toBe('right');
+    });
+
+    test('wide screens fit the chart to the page with the count axis on the left', async ({ page }) => {
+      test.skip(mobile, 'desktop only');
+      await open(page, 'claude-code/');
+      expect(await page.evaluate(() => document.querySelector('.chart-wrap').style.width)).toBe('');
+      expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
     });
 
     test('period entries draw as a context band', async ({ page }) => {
@@ -138,16 +197,51 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
   });
 }
 
-test('a category without a palette colour is still drawn, with a fallback colour', async ({ page }) => {
+test('a category without a palette colour is folded into Other, counts included', async ({ page }) => {
   await page.route('**/data/claude-code/summary.json', async (route) => {
     const res = await route.fetch();
     const s = await res.json();
-    s.totals.byCategory.mystery = 0;
+    s.totals.byCategory.mystery = 5;
     await route.fulfill({ response: res, json: s });
   });
+  await page.route('**/data/claude-code/weekly.json', async (route) => {
+    const res = await route.fetch();
+    const w = await res.json();
+    w[0].counts.mystery = 5; w[0].total += 5; // first week carries the unknown category
+    await route.fulfill({ response: res, json: w });
+  });
   const errors = await open(page, 'claude-code/');
-  await expect(page.locator('#legend button', { hasText: 'Mystery' })).toHaveCount(1);
-  const color = await page.evaluate(() => __chart.data.datasets.find((d) => d.label === 'Mystery')?.backgroundColor({ dataIndex: -1 }));
-  expect(color).toMatch(/^#[0-9a-f]{6}$/);
+  await expect(page.locator('#legend')).not.toContainText('Mystery');
+  expect(await page.evaluate(() => __chart.data.datasets.some((d) => d.label === 'Mystery'))).toBe(false);
+  const other = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'))[0].counts.other ?? 0;
+  expect(await page.evaluate(() => __chart.data.datasets.find((d) => d.label === 'Other').data[0])).toBe(other + 5);
   expect(errors).toEqual([]);
+});
+
+test('fewer than four complete weeks: the note names the shorter window', async ({ page }) => {
+  await page.route('**/data/claude-code/weekly.json', async (route) => {
+    const res = await route.fetch();
+    const w = await res.json();
+    await route.fulfill({ response: res, json: w.slice(-3) }); // 2 complete weeks + the current one
+  });
+  await open(page, 'claude-code/');
+  await expect(page.locator('#fn-window')).toContainText('last 2 complete weeks');
+  await expect(page.locator('#fn-window')).not.toContainText('4 complete weeks');
+});
+
+test('resizing across the breakpoint moves the count axis and scrolls to the latest week', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.route('**/data/claude-code/weekly.json', async (route) => {
+    const res = await route.fetch();
+    const w = await res.json();
+    const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0, fixShare: null }));
+    await route.fulfill({ response: res, json: [...pad, ...w] });
+  });
+  await open(page, 'claude-code/');
+  expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.waitForFunction(() => __chart.scales.y.position === 'right');
+  const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft }; });
+  expect(m.sw).toBeGreaterThan(m.cw);
+  expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
 });

@@ -49,7 +49,7 @@ test('rejects a missing calendar day and a missing ISO week', () => {
   assert.ok(week.some((e) => /every ISO week/.test(e)), week.join('\n'));
 });
 
-test('rejects a commits summary whose bots total is missing or out of range', () => {
-  const errs = violationsAfter('data/sparse/summary.json', (s) => { delete s.totals.bots; return s; });
-  assert.ok(errs.some((e) => /bots/.test(e)), errs.join('\n'));
+test('rejects an annotation whose major flag is not a boolean', () => {
+  const errs = violationsAfter('data/annotations.json', (ann) => { ann[0].major = 'yes'; return ann; });
+  assert.ok(errs.some((e) => /annotations\.json: bad entry/.test(e)), errs.join('\n'));
 });

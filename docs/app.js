@@ -1,12 +1,25 @@
 (() => {
-const PAL = { fixed: '#3b8ff5', changed: '#f0b429', improved: '#b474ff', added: '#2fbf4a', other: '#8a8f98', removed: '#e5484d',
-  revert: '#ec6f9b', chore: '#5c6670', test: '#2bb8b0', docs: '#6c7ae0', ci: '#c97a3a' };
-const catColor = (c) => PAL[c] ?? PAL.other; // a category added without a palette entry still draws
+// Display groups in stack and legend order. The six identity colours are dataviz reference dark-palette steps in
+// an order where every adjacent pair passes the CVD and normal-vision checks on the panel surface; Other is a
+// neutral gray on top because it carries no identity.
+const GROUPS = [
+  { key: 'fixed', color: '#3987e5', cats: ['fixed'] },
+  { key: 'maintenance', color: '#199e70', cats: ['chore', 'test', 'docs', 'ci'] },
+  { key: 'changed', color: '#c98500', cats: ['changed', 'improved'] },
+  { key: 'revert', color: '#d55181', cats: ['revert'] },
+  { key: 'added', color: '#008300', cats: ['added'] },
+  { key: 'removed', color: '#e66767', cats: ['removed'] },
+  { key: 'other', color: '#8a8f98', cats: ['other'] },
+];
+const groupOf = (cat) => GROUPS.find((g) => g.cats.includes(cat)) ?? GROUPS.find((g) => g.key === 'other');
+const MAINT = GROUPS.find((g) => g.key === 'maintenance').cats;
 const ACCENT = '#e8702a';
 const MARKER = '#f0932b';
+const PANEL = '#12151a';
 const DAY = 86_400_000;
-const DAY_WINDOW = 120; // day view shows the most recent days only
-const VENDORS = { anthropic: 'Anthropic', openai: 'OpenAI' };
+const WEEK = 7 * DAY;
+const ROLL = 4; // weeks in the rolling fix share window and in each KPI window
+const PX_PER_WEEK = 12; // narrow screens: the chart scrolls sideways at this width per week
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, { dataset, ...props } = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); Object.assign(n.dataset, dataset); n.append(...kids); return n; };
@@ -14,17 +27,25 @@ const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${pa
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
 const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
-const cap = (s) => (s === 'ci' ? 'CI' : s[0].toUpperCase() + s.slice(1));
+const weekEnd = (d) => dayOf(Date.parse(`${d}T00:00:00Z`) + 6 * DAY);
+const span = (ws) => `${fmt(ws[0].d)} – ${fmt(weekEnd(ws.at(-1).d))}`;
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const pct = (x) => `${Math.round(x * 100)}%`;
 const LAST = 'codebase-trends:project';
 // Storage throws when the browser blocks it; remembering the project is optional.
 const remembered = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
 const remember = (id) => { try { localStorage.setItem(LAST, id); } catch {} };
 const narrow = () => matchMedia('(max-width: 719px)').matches;
 
+const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
+const fixes = (r) => (r.counts.fixed ?? 0) + (r.counts.revert ?? 0);
+const work = (r) => r.total - sum(MAINT, (c) => r.counts[c] ?? 0);
+/** Pooled fix share over rows; null when nothing but maintenance landed. */
+const pooledFix = (rows) => { const d = sum(rows, work); return d === 0 ? null : sum(rows, fixes) / d; };
+
 async function projectPage() {
   const id = document.body.dataset.project;
-  const basis = document.body.dataset.basis;
-  const changelog = basis === 'changelog';
+  const changelog = document.body.dataset.basis === 'changelog';
   const D = '../data/';
   const [projects, annotations, summary, dailyRaw, weeklyRaw, releases] = await Promise.all([
     get(`${D}projects.json`), get(`${D}annotations.json`), get(`${D}${id}/summary.json`),
@@ -38,204 +59,195 @@ async function projectPage() {
   const generatedAt = Date.parse(summary.generatedAt);
   const noun = changelog ? 'Changelog items' : 'Commits';
 
-  // Rows extended with empty rows up to today (UTC) so the not-yet-collected span is on the axis.
-  const extend = (rows, step, last) => {
-    const out = [...rows];
-    for (let t = Date.parse(`${rows.at(-1).d}T00:00:00Z`) + step * DAY; dayOf(t) <= last; t += step * DAY) {
-      out.push({ d: dayOf(t), counts: {}, total: 0, fixShare: null, botShare: null });
-    }
-    return out;
+  // Weekly rows extended with empty rows up to the current week so the not-yet-collected span is on the axis.
+  const rows = [...weeklyRaw];
+  for (let t = Date.parse(`${rows.at(-1).d}T00:00:00Z`) + WEEK; dayOf(t) <= mondayOf(dayOf(now)); t += WEEK) {
+    rows.push({ d: dayOf(t), counts: {}, total: 0, fixShare: null });
+  }
+  const anchor = Date.parse(`${rows[0].d}T00:00:00Z`);
+  const end = anchor + rows.length * WEEK;
+  const curIdx = rows.findIndex((r) => { const t = Date.parse(`${r.d}T00:00:00Z`); return t <= now && now < t + WEEK; });
+  const catsOf = (g) => Object.keys(summary.totals.byCategory).filter((c) => groupOf(c) === g); // includes categories GROUPS never named
+  const groups = GROUPS.filter((g) => catsOf(g).length);
+
+  $('meta').textContent = `updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${summary.totals.events.toLocaleString('en-US')} ${noun.toLowerCase()}`;
+
+  // ---- KPIs: the last ROLL complete weeks (fewer when the history is shorter), against the ROLL weeks before ----
+  const kpiEnd = curIdx < 0 ? rows.length : curIdx;
+  const last = rows.slice(Math.max(0, kpiEnd - ROLL), kpiEnd);
+  const ref = kpiEnd >= 2 * ROLL ? rows.slice(kpiEnd - 2 * ROLL, kpiEnd - ROLL) : []; // the ROLL weeks right before
+  const inWeeks = (ws) => releases.filter((r) => r.ts.slice(0, 10) >= ws[0].d && r.ts.slice(0, 10) <= weekEnd(ws.at(-1).d)).length;
+  const perWeek = (f) => (ws) => (ws.length ? f(ws) / ws.length : null);
+  const NOTES = ['window', 'fix', 'markers'];
+  const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
+  const FIX = 'Fixes %';
+  const sign = (x) => (x > 0 ? '+' : x < 0 ? '−' : '±');
+  const change = (a, b, share) => { // rounded first, so a change that rounds to 0 reads ±0
+    if (!share && b === 0) return '–';
+    const d = Math.round(share ? (a - b) * 100 : (a / b - 1) * 100);
+    return `${sign(d)}${Math.abs(d)}${share ? ' pts' : '%'}`;
   };
-  const relBy = (key) => releases.reduce((m, r) => m.set(key(r.ts.slice(0, 10)), (m.get(key(r.ts.slice(0, 10))) ?? 0) + 1), new Map());
-  const tag = (rows, relMap) => rows.map((r) => ({ ...r, rel: relMap.get(r.d) ?? 0 }));
-  const today = dayOf(now);
-  const daily = tag(extend(dailyRaw, 1, today), relBy((d) => d));
-  const weekly = tag(extend(weeklyRaw, 7, mondayOf(today)), relBy(mondayOf));
-  const metric = (r) => (state.tab === 'releases' ? r.rel : r.total);
-  const state = { tab: 'type', view: 'week', hidden: new Set(), vendors: new Set(vendors), overlays: new Set(['avg']) };
-  let chart;
+  const kpis = [
+    { k: `${noun} / week`, f: perWeek((ws) => sum(ws, (r) => r.total)), show: (v) => v.toFixed(0) },
+    { k: 'New features / week', f: perWeek((ws) => sum(ws, (r) => r.counts.added ?? 0)), show: (v) => v.toFixed(0) },
+    { k: FIX, f: pooledFix, show: pct, share: true },
+    ...(changelog ? [{ k: 'Versions released / week', f: perWeek(inWeeks), show: (v) => v.toFixed(1) }] : []),
+  ];
+  $('kpis').replaceChildren(...kpis.map(({ k, f, show, share }) => {
+    const a = last.length ? f(last) : null;
+    const b = ref.length ? f(ref) : null;
+    const vs = a == null || b == null ? ['no prior period to compare'] : [el('b', { textContent: change(a, b, share) }), ` vs prior period (${show(b)})`];
+    return el('div', { className: 'kpi' }, el('div', { className: 'k' }, k, fn('window'), ...(share ? [fn('fix')] : [])),
+      el('div', { className: 'v', textContent: a == null ? '–' : show(a) }), el('div', { className: 'ref' }, ...vs));
+  }));
+  $('fn-window').textContent = `Per-week averages over the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''}; the prior period is the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
+  $('fn-fix').textContent = `${FIX}: fixes as a share of changes, (fixed + reverts) ÷ (${noun.toLowerCase()} − maintenance). The chart line is its trailing ${ROLL}-week average, each week with the ${ROLL - 1} before it.`;
 
-  const cats = ORDER_CATS(Object.keys(summary.totals.byCategory));
+  // ---- shared chart furniture: context periods, not-yet-collected hatch, model markers ----
+  const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.end ?? a.date) + DAY > anchor;
+  const major = annotations.filter((a) => a.kind === 'model' && a.major && inRange(a)).sort((a, b) => (a.date + a.label < b.date + b.label ? -1 : 1));
+  const periods = annotations.filter((a) => a.kind === 'period' && inRange(a));
+  const pattern = (() => {
+    const c = el('canvas', { width: 8, height: 8 });
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
+    return c;
+  })();
+  const toX = (chart, t) => {
+    const sx = chart.scales.x;
+    const slot = sx.getPixelForValue(1) - sx.getPixelForValue(0);
+    return sx.getPixelForValue(0) - slot / 2 + ((t - anchor) / WEEK) * slot;
+  };
+  const furniture = {
+    id: 'furniture',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: a } = chart;
+      ctx.save();
+      ctx.fillStyle = 'rgba(138,143,152,.28)';
+      for (const p of periods) {
+        const x0 = Math.max(a.left, toX(chart, Date.parse(p.date)));
+        const x1 = Math.min(a.right, toX(chart, Date.parse(p.end ?? p.date) + DAY));
+        if (x1 > x0) ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
+      }
+      const x0 = Math.max(a.left, toX(chart, generatedAt));
+      const x1 = Math.min(a.right, toX(chart, now));
+      chart.$hatch = { x0, x1, width: Math.max(0, x1 - x0) };
+      if (x1 > x0) { ctx.fillStyle = ctx.createPattern(pattern, 'repeat'); ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top); }
+      const entry = $('legend-hatch'); // the legend only explains a hatch that is on screen
+      if (entry) entry.hidden = x1 - x0 < 1; // a sub-pixel hatch right after a sync is not on screen
+      ctx.restore();
+    },
+    afterDraw(chart) {
+      const { ctx, chartArea: a } = chart;
+      const rowEnd = [];
+      chart.$markers = [];
+      ctx.save();
+      major.forEach((m, i) => {
+        const x = Math.round(toX(chart, Date.parse(m.date) + DAY / 2)) + 0.5; // on the pixel grid: a 1px line off it blurs to gray
+        if (x < a.left || x > a.right) return;
+        let r = rowEnd.findIndex((e) => x - e >= 20); // badges are 18px wide; closer than that, go up a row
+        if (r < 0) r = Math.min(rowEnd.length, 2);
+        rowEnd[r] = x;
+        const y = a.top - 14 - r * 22;
+        ctx.strokeStyle = MARKER; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x, a.bottom); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = MARKER; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(i + 1), x, y + 0.5);
+        chart.$markers.push({ n: i + 1, x, y });
+      });
+      ctx.restore();
+    },
+  };
+  const onClick = (e, _els, ch) => {
+    const hit = ch.getElementsAtEventForMode(e, 'index', { intersect: false }, true)[0];
+    if (hit) openDrill(rows[hit.index].d, 'week');
+  };
+  const weekTitle = (items) => `Week of ${fmt(items[0].label, true)}${items[0].dataIndex === curIdx ? ' (in progress)' : ''}`;
 
-  // ---- header, stats ----
-  const tabs = [['type', 'By type'], ['changes', changelog ? 'Changes' : 'Commits'], ...(changelog ? [['releases', 'Releases']] : [])];
-  const stat = (k, v) => el('div', { className: 'stat' }, el('div', { className: 'k', textContent: k }), el('div', { className: 'v', textContent: String(v) }));
-  const stats = [stat(changelog ? 'Bullets' : 'Commits', summary.totals.events.toLocaleString('en-US'))];
-  if (changelog) stats.push(stat('Versions', summary.totals.versions));
-  stats.push(stat(changelog ? 'Median release day' : 'Median active day', summary.medianPerReleaseDay ?? '–'));
-  if (summary.busiestDay) stats.push(stat(`Busiest day (${fmt(summary.busiestDay.d)})`, summary.busiestDay.n));
-  if (!changelog && summary.totals.events) {
-    stats.push(stat('Bot-authored', `${Math.round((summary.totals.bots / summary.totals.events) * 100)}%`));
-  }
-  $('stats').replaceChildren(...stats);
-  $('meta').textContent = `${fmt(summary.firstDate, true)} – ${fmt(summary.lastDate, true)} · UTC days · median counts ${changelog ? 'bullets on days with at least one release' : 'commits on days with at least one commit'}`;
-  $('updated').textContent = `Data updated ${summary.generatedAt.slice(0, 16).replace('T', ' ')} UTC`;
+  // ---- fix share: rolling window over the preceding weeks, nothing past the current week ----
+  const rolling = rows.map((_, i) => (curIdx >= 0 && i > curIdx ? null : pooledFix(rows.slice(Math.max(0, i - ROLL + 1), i + 1))));
+  $('title').textContent = `${noun} per week`;
+  $('subtitle').replaceChildren(`${changelog ? 'Every changelog line item, counted in the week its version was published' : 'Commits on the default branch (first-parent), counted in the week they landed'}. `
+    + `The line is ${FIX}`, fn('fix'), ' on the right axis. Click a week to list its items.');
 
-  function renderControls() {
-    $('tabs').replaceChildren(...tabs.map(([k, label]) => el('button', {
-      type: 'button', textContent: label, role: 'tab', ariaSelected: String(state.tab === k),
-      onclick: () => { state.tab = k; render(); },
-    })));
-    const view = el('div', { className: 'seg' }, ...['week', 'day'].map((v) => el('button', {
-      type: 'button', textContent: v === 'week' ? 'Per week' : 'Per day', ariaPressed: String(state.view === v),
-      onclick: () => { state.view = v; render(); },
-    })));
-    const check = (label, on, set, key) => el('label', {}, el('input', {
-      type: 'checkbox', checked: on, onchange: (e) => { e.target.checked ? set.add(key) : set.delete(key); render(); },
-    }), label);
-    const overlays = [];
-    if (state.view === 'day') overlays.push(check('7-day average', state.overlays.has('avg'), state.overlays, 'avg'));
-    if (state.tab !== 'releases') overlays.push(check('Fix share', state.overlays.has('fix'), state.overlays, 'fix'));
-    if (!changelog && state.tab !== 'releases') overlays.push(check('Bot share', state.overlays.has('bot'), state.overlays, 'bot'));
-    $('controls').replaceChildren(view, ...overlays, ...vendors.map((v) => check(`${VENDORS[v] ?? v} releases`, state.vendors.has(v), state.vendors, v)));
-  }
-
-  // ---- chart ----
-  function render() {
-    renderControls();
-    const view = state.view;
-    const unit = view === 'week' ? 7 : 1;
-    let rows = view === 'week' ? weekly : daily;
-    const avg = daily.map((_, i) => daily.slice(Math.max(0, i - 6), i + 1).reduce((s, r) => s + metric(r), 0) / 7);
-    const from = rows.length - (view === 'day' ? DAY_WINDOW : rows.length);
-    const avgSeries = view === 'day' ? avg.slice(Math.max(0, from)) : [];
-    rows = rows.slice(Math.max(0, from));
-    const anchor = Date.parse(`${rows[0].d}T00:00:00Z`);
-    const end = anchor + rows.length * unit * DAY;
-    const curIdx = rows.findIndex((r) => Date.parse(`${r.d}T00:00:00Z`) <= now && now < Date.parse(`${r.d}T00:00:00Z`) + unit * DAY);
-    const fade = (hex) => (c) => (c.dataIndex === curIdx ? `${hex}73` : hex);
-
-    $('subtitle').textContent = state.tab === 'releases' ? `Versions released per ${view}.`
-      : changelog ? `Changes count every changelog line item in the period's releases. Per ${view}${view === 'day' ? `, last ${DAY_WINDOW} days` : ''}.`
-        : `Commits on the default branch (first-parent). Per ${view}${view === 'day' ? `, last ${DAY_WINDOW} days` : ''}.`;
-    $('title').textContent = state.tab === 'type' ? `${noun} by type, per ${view}` : state.tab === 'releases' ? `Releases per ${view}` : `${noun} per ${view}`;
-
-    const bar = { stack: 's', borderWidth: 0, categoryPercentage: 1, barPercentage: 0.9, order: 2 };
-    const datasets = state.tab === 'type'
-      ? cats.map((c) => ({ ...bar, label: cap(c), data: rows.map((r) => r.counts[c] ?? 0), backgroundColor: fade(catColor(c)), hidden: state.hidden.has(c) }))
-      : [{ ...bar, label: state.tab === 'releases' ? 'Versions' : noun, data: rows.map(metric), backgroundColor: fade(state.tab === 'releases' ? ACCENT : PAL.fixed) }];
-    const line = (label, data, color, yAxisID) => ({ type: 'line', label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, pointHitRadius: 0, tension: 0.2, yAxisID, order: 1, spanGaps: false });
-    if (state.overlays.has('avg') && view === 'day') datasets.push(line('7-day average', avgSeries, '#ffffff', 'y'));
-    if (state.overlays.has('fix') && state.tab !== 'releases') datasets.push(line('Fix share', rows.map((r) => r.fixShare), ACCENT, 'y1'));
-    if (state.overlays.has('bot') && !changelog && state.tab !== 'releases') datasets.push(line('Bot share', rows.map((r) => r.botShare), '#ec6f9b', 'y1'));
-    const pct = datasets.some((d) => d.yAxisID === 'y1');
-
-    // Marker numbers are assigned in date order over the visible model entries.
-    const inRange = (a) => state.vendors.has(a.vendor) && vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.end ?? a.date) + DAY > anchor;
-    const models = annotations.filter((a) => a.kind === 'model' && inRange(a)).sort((a, b) => (a.date + a.label < b.date + b.label ? -1 : 1));
-    const periods = annotations.filter((a) => a.kind === 'period' && inRange(a));
-
-    renderLegend(models.length, periods.length);
-    renderChips(models, periods);
-
-    const pattern = (() => {
-      const c = el('canvas', { width: 8, height: 8 });
-      const g = c.getContext('2d');
-      g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
-      return c;
-    })();
-    const toX = (chart, t) => {
-      const sx = chart.scales.x;
-      const slot = sx.getPixelForValue(1) - sx.getPixelForValue(0);
-      return sx.getPixelForValue(0) - slot / 2 + ((t - anchor) / (unit * DAY)) * slot;
-    };
-    const overlay = {
-      id: 'overlay',
-      beforeDatasetsDraw(chart) {
-        const { ctx, chartArea: a } = chart;
-        ctx.save();
-        ctx.fillStyle = 'rgba(138,143,152,.28)';
-        for (const p of periods) {
-          const x0 = Math.max(a.left, toX(chart, Date.parse(p.date)));
-          const x1 = Math.min(a.right, toX(chart, Date.parse(p.end ?? p.date) + DAY));
-          if (x1 > x0) ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
-        }
-        const x0 = Math.max(a.left, toX(chart, generatedAt));
-        const x1 = Math.min(a.right, toX(chart, now));
-        chart.$hatch = { x0, x1, width: Math.max(0, x1 - x0) };
-        if (x1 > x0) { ctx.fillStyle = ctx.createPattern(pattern, 'repeat'); ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top); }
-        ctx.restore();
-      },
-      afterDraw(chart) {
-        const { ctx, chartArea: a } = chart;
-        const small = narrow();
-        const rowEnd = [];
-        chart.$markers = [];
-        ctx.save();
-        models.forEach((m, i) => {
-          const x = toX(chart, Date.parse(m.date) + DAY / 2);
-          if (x < a.left || x > a.right) return;
-          let r = rowEnd.findIndex((e) => x - e >= 24);
-          if (r < 0) r = Math.min(rowEnd.length, 2);
-          rowEnd[r] = x;
-          const y = a.top - 14 - r * 22;
-          ctx.strokeStyle = MARKER; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-          ctx.beginPath(); ctx.moveTo(x, small ? a.top : y + 9); ctx.lineTo(x, a.bottom); ctx.stroke();
-          ctx.setLineDash([]);
-          if (!small) {
-            ctx.fillStyle = '#12151a'; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = MARKER; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(String(i + 1), x, y + 0.5);
-          }
-          chart.$markers.push({ n: i + 1, x, y: small ? null : y });
-        });
-        ctx.restore();
-      },
-    };
-
-    chart?.destroy();
-    chart = new Chart($('chart'), {
-      type: 'bar',
-      data: { labels: rows.map((r) => r.d), datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
-        layout: { padding: { top: narrow() ? 6 : 70 } },
-        interaction: { mode: 'index', intersect: false },
-        onClick: (e, _els, ch) => {
-          const hit = ch.getElementsAtEventForMode(e, 'index', { intersect: false }, true)[0];
-          if (hit) openDrill(rows[hit.index].d, view);
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: {
-            title: (items) => (view === 'week' ? `Week of ${fmt(items[0].label, true)}` : fmt(items[0].label, true)),
-            footer: (items) => (state.tab === 'type' ? `Total: ${rows[items[0].dataIndex].total}` : ''),
-          } },
-        },
-        scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow() ? 5 : 10, callback(v) { return fmt(this.getLabelForValue(v)); } } },
-          y: { stacked: true, beginAtZero: true, grid: { color: '#1b1f25' }, ticks: { maxTicksLimit: 6 } },
-          y1: { display: pct, position: 'right', min: 0, max: 1, grid: { drawOnChartArea: false }, ticks: { callback: (v) => `${Math.round(v * 100)}%` } },
+  // ---- one chart: stacked weekly bars by group, the rolling fix share drawn over them on a 0–100% axis ----
+  // The second y-axis is the owner's call against the dataviz one-axis rule: a separate fix-share chart above the
+  // bars with a synced crosshair was built and rejected as harder to read together. Keep the overlay; the halo
+  // dataset keeps the line legible over tall bars.
+  // Narrow screens get a fixed width per week inside a sideways-scrolling wrapper, opened at the latest week,
+  // with the axes on the right so they stay in view there. `layout` re-applies this whenever the viewport changes.
+  const scroll = $('chart').closest('.chart-scroll');
+  const wrap = $('chart').parentElement;
+  const layout = (ch) => {
+    const small = narrow();
+    wrap.style.width = small ? `${Math.max(scroll.clientWidth, rows.length * PX_PER_WEEK)}px` : '';
+    if (ch) {
+      ch.options.scales.y.position = small ? 'right' : 'left';
+      ch.options.scales.x.ticks.maxTicksLimit = small ? 8 : 10;
+      ch.update();
+    }
+    if (small) scroll.scrollLeft = scroll.scrollWidth;
+  };
+  layout();
+  const fade = (hex) => (c) => (c.dataIndex === curIdx ? `${hex}73` : hex);
+  const line = (label, color, width, order) => ({ type: 'line', label, data: rolling, yAxisID: 'y1', borderColor: color, backgroundColor: color, borderWidth: width, pointRadius: 0, pointHitRadius: 8, tension: 0.2, spanGaps: false, order });
+  const chart = new Chart($('chart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map((r) => r.d),
+      datasets: [
+        ...groups.map((g) => ({
+          label: cap(g.key), data: rows.map((r) => sum(catsOf(g), (c) => r.counts[c] ?? 0)), backgroundColor: fade(g.color),
+          stack: 's', borderColor: PANEL, borderWidth: { top: 1 }, borderSkipped: false, categoryPercentage: 1, barPercentage: 0.85, order: 2,
+        })),
+        line('halo', PANEL, 5, 1), // a dark outline keeps the line legible over bars of any colour
+        line(FIX, ACCENT, 2, 0),
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { top: 70 } },
+      interaction: { mode: 'index', intersect: false },
+      onClick,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: (it) => it.dataset.label !== 'halo',
+          callbacks: {
+            title: weekTitle,
+            label: (it) => `${it.dataset.label}: ${it.dataset.label === FIX ? pct(it.parsed.y) : it.parsed.y}`,
+            footer: (items) => `Total: ${rows[items[0].dataIndex].total}`,
+          },
         },
       },
-      plugins: [overlay],
-    });
-    // Test hooks read by test/browser.spec.js.
-    chart.$periods = periods;
-    window.__chart = chart;
-  }
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow() ? 8 : 10, callback(v) { return fmt(this.getLabelForValue(v)); } } },
+        y: { stacked: true, beginAtZero: true, position: narrow() ? 'right' : 'left', grid: { color: '#1b1f25' }, ticks: { maxTicksLimit: 6 } }, // layout() keeps these in step
+        y1: { position: 'right', min: 0, max: 1, grid: { drawOnChartArea: false }, ticks: { stepSize: 0.25, callback: (v) => pct(v), color: ACCENT } },
+      },
+    },
+    plugins: [furniture],
+  });
+  chart.$periods = periods;
+  window.__chart = chart; // test hook read by test/browser.spec.js
 
-  function renderLegend(nMarkers, nPeriods) {
-    const item = (cls, text) => el('span', {}, el('span', { className: `sw ${cls}` }), text);
-    const cat = (c) => el('button', {
-      type: 'button', ariaPressed: String(!state.hidden.has(c)),
-      onclick: () => { state.hidden.has(c) ? state.hidden.delete(c) : state.hidden.add(c); render(); },
-    }, el('span', { className: 'sw', style: `background:${catColor(c)}` }), cap(c));
-    $('legend').replaceChildren(
-      ...(state.tab === 'type' ? cats.map(cat) : []),
-      ...(nMarkers ? [item('marker', 'Public model release')] : []),
-      ...(nPeriods ? [item('period', 'Context period (approx.)')] : []),
-      item('fade', 'Faded bar: incomplete period'), item('hatch', 'Not yet collected'));
-  }
-
-  function renderChips(models, periods) {
-    $('chips').replaceChildren(
-      ...models.map((m, i) => el('a', { className: 'chip', href: m.source, target: '_blank', rel: 'noopener', title: m.source, style: 'text-decoration:none;color:inherit' },
-        el('span', { className: 'dot' }), el('span', { className: 'n', textContent: String(i + 1) }), `${m.label} · ${fmt(m.date)}`)),
-      ...periods.map((p) => el('a', { className: 'chip', href: p.source, target: '_blank', rel: 'noopener', title: p.source, style: 'text-decoration:none;color:inherit' },
-        el('span', { className: 'sq' }), `${p.label} · ${fmt(p.date)}–${fmt(p.end ?? p.date)}`)));
-  }
+  const item = (cls, text, props = {}) => el('span', props, el('span', { className: `sw ${cls}` }), text);
+  $('legend').replaceChildren(
+    ...groups.map((g) => el('span', {}, el('span', { className: 'sw', style: `background:${g.color}` }), cap(g.key))),
+    el('span', {}, el('span', { className: 'sw line' }), el('span', {}, FIX, fn('fix'), ' (right axis)')),
+    ...(major.length ? [el('span', {}, el('span', { className: 'sw marker' }), el('span', {}, 'Major model release', fn('markers')))] : []),
+    ...(periods.length ? [item('period', 'Context period (approx.)')] : []),
+    item('hatch', 'Not yet collected', { id: 'legend-hatch', hidden: true }));
+  $('fn-markers').hidden = !major.length; // the note explains markers that are on the chart
+  chart.update(); // the hatch legend entry is decided inside the draw, which ran before the entry existed
+  const link = (a, ...kids) => el('a', { className: 'chip', href: a.source, target: '_blank', rel: 'noopener', title: `${a.label} · ${fmt(a.date, true)}${a.end ? `–${fmt(a.end, true)}` : ''} · ${a.source}`, style: 'text-decoration:none;color:inherit' }, ...kids);
+  // Dates are hidden on narrow screens (the marker on the chart gives them) and always in the chip's title.
+  $('chips').replaceChildren(
+    ...major.map((m, i) => link(m, el('span', { className: 'dot' }), el('span', { className: 'n', textContent: String(i + 1) }), m.label, el('span', { className: 'date', textContent: ` · ${fmt(m.date)}` }))),
+    ...periods.map((p) => link(p, el('span', { className: 'sq' }), p.label, el('span', { className: 'date', textContent: ` · ${fmt(p.date)}–${fmt(p.end ?? p.date)}` }))));
 
   // ---- drill-down ----
   async function openDrill(d, view) {
@@ -243,20 +255,20 @@ async function projectPage() {
     const months = [...new Set(dailyRaw.filter((r) => r.d >= d && r.d <= to && r.total > 0).map((r) => r.d.slice(0, 7)))];
     const events = (await Promise.all(months.map((m) => get(`${D}${id}/months/${m}.json`)))).flat()
       .filter((e) => e.ts.slice(0, 10) >= d && e.ts.slice(0, 10) <= to);
-    $('drill-title').textContent = view === 'week' ? `Week of ${fmt(d, true)} · ${events.length} events` : `${fmt(d, true)} · ${events.length} events`;
+    $('drill-title').textContent = `${view === 'week' ? `Week of ${fmt(d, true)}` : fmt(d, true)} · ${events.length} events`;
     const body = $('drill-table').tBodies[0];
     body.replaceChildren();
-    let last;
+    let lastDay;
     for (const e of events) {
       const day = e.ts.slice(0, 10);
-      if (view === 'week' && day !== last) {
+      if (view === 'week' && day !== lastDay) {
         body.append(el('tr', { className: 'day' }, el('th', { colSpan: 4, textContent: `${fmt(day, true)} · ${events.filter((x) => x.ts.startsWith(day)).length} events` })));
-        last = day;
+        lastDay = day;
       }
       const ref = e.version ?? e.sha.slice(0, 7);
       body.append(el('tr', { className: 'ev' },
         el('td', { dataset: { label: changelog ? 'Version' : 'Commit' } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
-        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${catColor(e.category)}`, textContent: e.category })),
+        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${groupOf(e.category).color}`, textContent: e.category })),
         el('td', { dataset: { label: 'Source' }, textContent: e.source }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
         el('td', { dataset: { label: 'Change' }, textContent: e.text })));
     }
@@ -270,17 +282,11 @@ async function projectPage() {
 
   const fromHash = () => {
     const m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
-    if (m) { state.view = 'day'; render(); return openDrill(m[1], 'day'); }
+    if (m) return openDrill(m[1], 'day');
   };
-  render();
   await fromHash();
   addEventListener('hashchange', fromHash);
-  addEventListener('resize', () => chart.update());
-}
-
-function ORDER_CATS(keys) {
-  const order = Object.keys(PAL);
-  return [...order.filter((c) => keys.includes(c)), ...keys.filter((c) => !order.includes(c))];
+  addEventListener('resize', () => layout(chart));
 }
 
 // The root has no content of its own: it opens the last project viewed, else the first configured.

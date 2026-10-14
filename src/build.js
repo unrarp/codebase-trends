@@ -9,14 +9,12 @@ import { classifyByRule, CATEGORIES } from './classify.js';
  *   projects.json            [{ id, name, basis, annotations: [vendor], links }]
  *   annotations.json         copy of annotations.json
  *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
- *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions?, bots? },
- *                              medianPerReleaseDay, busiestDay: { d, n } }   versions: changelog; bots: commits
- *   <project>/daily.json     [{ d, counts, total, fixShare, botShare? }]  every calendar day firstDate..lastDate
+ *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions? } }   versions: changelog
+ *   <project>/daily.json     [{ d, counts, total, fixShare }]  every calendar day firstDate..lastDate
  *   <project>/weekly.json    same rows, d = ISO-week Monday, every week
  *   <project>/releases.json  [{ version, ts, count }]                    changelog basis only
  *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, url? }]
- * medianPerReleaseDay and busiestDay are null with no events; fixShare is null when its denominator is 0;
- * botShare (commits only) is null when total is 0.
+ * fixShare is null when its denominator is 0.
  */
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
@@ -83,26 +81,15 @@ function deriveEvents(project, root) {
   return out.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0)); // stable: ties keep file order
 }
 
-const median = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-
 function aggregate(events, project, keyOf, keys) {
   const cats = CATEGORIES[project.basis];
-  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, bots: 0 }]));
+  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0 }]));
   for (const e of events) {
     const r = by.get(keyOf(e.ts.slice(0, 10)));
     r.counts[e.category]++;
     r.total++;
-    if (e.bot) r.bots++;
   }
-  return [...by.values()].map(({ d, counts, total, bots }) => {
-    const row = { d, counts, total, fixShare: fixShare(counts, total) };
-    if (project.basis === 'commits') row.botShare = total === 0 ? null : Math.round((bots / total) * 1e4) / 1e4;
-    return row;
-  });
+  return [...by.values()].map(({ d, counts, total }) => ({ d, counts, total, fixShare: fixShare(counts, total) }));
 }
 
 function buildProject(project, root, out, generatedAt) {
@@ -122,7 +109,6 @@ function buildProject(project, root, out, generatedAt) {
     byCategory: Object.fromEntries(cats.map((c) => [c, events.filter((e) => e.category === c).length])),
     bySource: Object.fromEntries(['rule', 'model', 'pending'].map((s) => [s, events.filter((e) => e.source === s).length])),
   };
-  if (project.basis === 'commits') totals.bots = events.filter((e) => e.bot).length;
   const releases = [];
   if (project.basis === 'changelog') {
     const byVersion = new Map();
@@ -130,12 +116,7 @@ function buildProject(project, root, out, generatedAt) {
     releases.push(...byVersion.values());
     totals.versions = releases.length;
   }
-  const busy = daily.reduce((b, r) => (r.total > (b?.n ?? 0) ? { d: r.d, n: r.total } : b), null);
-  json(join(od, 'summary.json'), {
-    project: project.id, name: project.name, basis: project.basis, generatedAt, firstDate, lastDate, totals,
-    medianPerReleaseDay: busy ? median(daily.filter((r) => r.total > 0).map((r) => r.total)) : null,
-    busiestDay: busy,
-  });
+  json(join(od, 'summary.json'), { project: project.id, name: project.name, basis: project.basis, generatedAt, firstDate, lastDate, totals });
   write(join(od, 'daily.json'), rows(daily));
   write(join(od, 'weekly.json'), rows(weekly));
   if (project.basis === 'changelog') write(join(od, 'releases.json'), rows(releases));

@@ -28,8 +28,8 @@ test('summary: totals, versions, bySource has rule, model and pending; undated v
   assert.deepEqual(s.totals.bySource, { rule: 10, model: 6, pending: 1 });
   assert.equal(s.totals.byCategory.fixed, 7);
   assert.equal(sum(Object.values(s.totals.byCategory)), 17);
-  assert.deepEqual(s.busiestDay, { d: '2026-08-31', n: 4 });
-  assert.equal(s.medianPerReleaseDay, 1.5); // 10 release days: 1,1,1,1,1,2,2,2,2,4
+  assert.equal('busiestDay' in s, false);
+  assert.equal('medianPerReleaseDay' in s, false);
   const releases = j('data/claude-code/releases.json');
   assert.equal(releases.length, 11);
   assert.equal(releases.some((r) => r.version === '2.1.226'), false);
@@ -45,6 +45,7 @@ test('daily: every calendar day to today, totals add up, fixShare', () => {
   assert.equal(d['2026-08-19'].fixShare, 0.5); // fixed + added
   assert.equal(d['2026-10-14'].total, 0); // zero row up to today
   assert.equal(d['2026-10-14'].fixShare, null);
+  assert.ok(daily.every((r) => !('botShare' in r) && !('regressions' in r))); // rows carry only what the site reads
 });
 
 test('weekly: every ISO week keyed by Monday, totals add up', () => {
@@ -57,7 +58,7 @@ test('weekly: every ISO week keyed by Monday, totals add up', () => {
   assert.equal(weekly.find((r) => r.d === '2026-08-31').total, 7); // Mon 08-31 (4) + 09-01 (2) + Sun 09-06 (1)
 });
 
-test('sparse commits project: zero rows for gap days and weeks, UTC day shift, fixShare null and botShare', () => {
+test('sparse commits project: zero rows for gap days and weeks, UTC day shift, fixShare null', () => {
   const daily = j('data/sparse/daily.json');
   const weekly = j('data/sparse/weekly.json');
   assert.deepEqual(daily.map((r) => r.d), eachDay('2026-08-03', '2026-10-14'));
@@ -69,14 +70,12 @@ test('sparse commits project: zero rows for gap days and weeks, UTC day shift, f
   assert.equal(d['2026-08-04'].fixShare, null); // chore + docs only → denominator 0
   assert.equal(d['2026-08-05'].fixShare, null);
   assert.equal(d['2026-08-21'].fixShare, 1); // revert counts as a fix
-  assert.equal(d['2026-08-21'].botShare, 1); // co-author ci[bot]
-  assert.equal(d['2026-08-04'].botShare, 0.5); // robobun from config.bots
-  assert.equal(d['2026-08-05'].botShare, null);
+  assert.ok(daily.concat(weekly).every((r) => !('botShare' in r)));
   assert.equal(weekly.find((r) => r.d === '2026-08-10').total, 0);
   const s = j('data/sparse/summary.json');
   assert.deepEqual(s.totals.bySource, { rule: 3, model: 1, pending: 1 });
   assert.equal('versions' in s.totals, false);
-  assert.equal(s.totals.bots, 2); // robobun on 08-04 + ci[bot] co-author on 08-21
+  assert.equal('bots' in s.totals, false);
   assert.equal(existsSync(join(out, 'data/sparse/releases.json')), false);
 });
 

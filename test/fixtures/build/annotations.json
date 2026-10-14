@@ -4,7 +4,8 @@
     "label": "Model A",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://example.test/a"
+    "source": "https://example.test/a",
+    "major": true
   },
   {
     "date": "2026-08-26",

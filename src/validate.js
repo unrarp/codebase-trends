@@ -25,7 +25,7 @@ export function validate(out) {
   }
   const ann = read('data/annotations.json');
   if (!Array.isArray(ann)) bad('data/annotations.json', 'not an array');
-  else for (const a of ann) if (!DATE.test(a.date) || !a.label || !a.vendor || !a.kind || !a.source) bad('data/annotations.json', `bad entry ${JSON.stringify(a)}`);
+  else for (const a of ann) if (!DATE.test(a.date) || !a.label || !a.vendor || !a.kind || !a.source || ('major' in a && typeof a.major !== 'boolean')) bad('data/annotations.json', `bad entry ${JSON.stringify(a)}`);
   if (!existsSync(join(out, 'index.html'))) bad('index.html', 'missing');
 
   for (const p of projects.filter((q) => CATEGORIES[q.basis])) {
@@ -40,7 +40,6 @@ export function validate(out) {
       bad(`${dir}/summary.json`, 'bad shape');
       continue;
     }
-    if (p.basis === 'commits' && !(Number.isInteger(totals.bots) && totals.bots >= 0 && totals.bots <= totals.events)) bad(`${dir}/summary.json`, 'totals.bots missing or out of range');
     if (sum(Object.values(totals.byCategory)) !== totals.events) bad(`${dir}/summary.json`, 'byCategory does not sum to events');
     if (sum(Object.values(totals.bySource)) !== totals.events) bad(`${dir}/summary.json`, 'bySource does not sum to events');
 
@@ -53,7 +52,6 @@ export function validate(out) {
         if (Object.keys(r.counts).some((c) => !cats.includes(c))) bad(w, 'category outside basis set');
         const want = fixShare(r.counts, r.total);
         if (r.fixShare !== want) bad(w, `fixShare ${r.fixShare} != recomputed ${want} (must be null iff denominator is 0)`);
-        if (p.basis === 'commits' ? !('botShare' in r) : 'botShare' in r) bad(w, 'botShare must exist for commits basis only');
       }
       if (sum(rows.map((r) => r.total)) !== totals.events) bad(f, `Σ total ${sum(rows.map((r) => r.total))} != summary.totals.events ${totals.events}`);
     }

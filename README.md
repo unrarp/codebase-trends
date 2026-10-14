@@ -9,16 +9,29 @@ collects data, commits it to this repo, and GitHub Pages serves `docs/`.
 
 ## What the site shows
 
-Per project, every change item is counted on the day it shipped and
+Per project, every change item is counted in the UTC week it shipped and
 categorised: `added`, `fixed`, `changed`, `improved`, `removed`, `other`, plus
-`revert`, `chore`, `test`, `docs`, `ci` for commit-based projects. Views:
-stacked bars per week or per day, a 7-day average, the fix share
-(`(fixed + revert) / (total − chore − test − docs − ci)`), and numbered
-model-release markers. Clicking a bar lists that period's items; `#YYYY-MM-DD`
-deep-links a day. The site root opens the project last viewed in that browser
-(else the first in `projects.json`); a switcher on each page changes project.
-The span after the last sync is hatched "Not yet collected", so a stalled
-routine shows as a growing hatch.
+`revert`, `chore`, `test`, `docs`, `ci` for commit-based projects. Every project
+page shows the same three things, so projects compare on one footing:
+
+1. **KPI tiles**: items per week, new features (`added`) per week, fixes as a
+   percentage of changes ("Fixes %"), and (changelog basis) versions released per
+   week, averaged over the last 4 complete weeks, each with its signed change
+   vs the 4 weeks before underneath.
+   One note under the chart defines the windows and the formula; the tiles
+   and the chart legend link to it.
+2. **One chart**: items per week by type as stacked bars, with the 4-week
+   rolling fix share, `(fixed + revert) / (total − chore − test − docs − ci)`,
+   drawn over them on a right-hand 0–100% axis. `improved` is shown as
+   `changed`; `chore`, `test`, `docs` and `ci` are one "maintenance" colour.
+   Clicking a week lists its items; `#YYYY-MM-DD` deep-links a day's list. On
+   narrow screens the chart scrolls sideways and opens at the latest week.
+
+Only model releases flagged `major` in `annotations.json` are drawn, as
+numbered markers; the other entries stay in the file unused. The site root opens the
+project last viewed in that browser (else the first in `projects.json`); a
+switcher on each page changes project. The span after the last sync is hatched
+"Not yet collected", so a stalled routine shows as a growing hatch.
 
 Two bases, set per project in `projects.json`:
 
@@ -26,8 +39,8 @@ Two bases, set per project in `projects.json`:
   publish time (`seed/claude-code-dates.json` covers the claude-code versions
   npm never listed).
 - **commits** (Codex): one item per first-parent commit on the default
-  branch since `sources.git.since`; bot share counts commits whose author or a
-  co-author is in the project's `bots` list or ends in `[bot]`.
+  branch since `sources.git.since`; a commit whose author or co-author is in
+  the project's `bots` list or ends in `[bot]` is flagged in the drill-down.
 
 ## Data flow
 

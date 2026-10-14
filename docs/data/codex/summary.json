@@ -2,7 +2,7 @@
   "project": "codex",
   "name": "Codex",
   "basis": "commits",
-  "generatedAt": "2026-10-14T23:16:05.567Z",
+  "generatedAt": "2026-10-14T23:16:06.139Z",
   "firstDate": "2025-04-16",
   "lastDate": "2026-10-14",
   "totals": {
@@ -24,12 +24,6 @@
       "rule": 5296,
       "model": 6952,
       "pending": 0
-    },
-    "bots": 143
-  },
-  "medianPerReleaseDay": 19,
-  "busiestDay": {
-    "d": "2026-08-20",
-    "n": 99
+    }
   }
 }

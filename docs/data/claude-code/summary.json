@@ -2,7 +2,7 @@
   "project": "claude-code",
   "name": "Claude Code",
   "basis": "changelog",
-  "generatedAt": "2026-10-14T23:16:05.567Z",
+  "generatedAt": "2026-10-14T23:16:06.139Z",
   "firstDate": "2025-03-04",
   "lastDate": "2026-10-14",
   "totals": {
@@ -21,10 +21,5 @@
       "pending": 0
     },
     "versions": 420
-  },
-  "medianPerReleaseDay": 9,
-  "busiestDay": {
-    "d": "2026-10-14",
-    "n": 278
   }
 }

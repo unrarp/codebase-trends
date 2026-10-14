@@ -43,7 +43,7 @@
   },
   {
     "date": "2025-05-22",
-    "label": "Claude 4 (Opus 4 / Sonnet 4)",
+    "label": "Opus 4",
     "vendor": "anthropic",
     "kind": "model",
     "source": "https://www.anthropic.com/news/claude-4"
@@ -60,7 +60,8 @@
     "label": "GPT-5",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-5/"
+    "source": "https://openai.com/index/introducing-gpt-5/",
+    "major": true
   },
   {
     "date": "2025-09-15",
@@ -88,7 +89,8 @@
     "label": "GPT-5.1",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/gpt-5-1/"
+    "source": "https://openai.com/index/gpt-5-1/",
+    "major": true
   },
   {
     "date": "2025-11-19",
@@ -102,14 +104,16 @@
     "label": "Opus 4.5",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-4-5"
+    "source": "https://www.anthropic.com/news/claude-opus-4-5",
+    "major": true
   },
   {
     "date": "2025-12-11",
     "label": "GPT-5.2",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-5-2/"
+    "source": "https://openai.com/index/introducing-gpt-5-2/",
+    "major": true
   },
   {
     "date": "2025-12-18",
@@ -130,7 +134,8 @@
     "label": "Opus 4.6",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-4-6"
+    "source": "https://www.anthropic.com/news/claude-opus-4-6",
+    "major": true
   },
   {
     "date": "2026-02-17",
@@ -144,35 +149,40 @@
     "label": "GPT-5.4",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-5-4/"
+    "source": "https://openai.com/index/introducing-gpt-5-4/",
+    "major": true
   },
   {
     "date": "2026-04-16",
     "label": "Opus 4.7",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-4-7"
+    "source": "https://www.anthropic.com/news/claude-opus-4-7",
+    "major": true
   },
   {
     "date": "2026-04-23",
     "label": "GPT-5.5",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-5-5/"
+    "source": "https://openai.com/index/introducing-gpt-5-5/",
+    "major": true
   },
   {
     "date": "2026-05-28",
     "label": "Opus 4.8",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-4-8"
+    "source": "https://www.anthropic.com/news/claude-opus-4-8",
+    "major": true
   },
   {
     "date": "2026-06-09",
     "label": "Fable 5",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-fable-5-mythos-5"
+    "source": "https://www.anthropic.com/news/claude-fable-5-mythos-5",
+    "major": true
   },
   {
     "date": "2026-06-30",
@@ -186,42 +196,48 @@
     "label": "GPT-5.6",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/gpt-5-6/"
+    "source": "https://openai.com/index/gpt-5-6/",
+    "major": true
   },
   {
     "date": "2026-07-24",
     "label": "Opus 5",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-5"
+    "source": "https://www.anthropic.com/news/claude-opus-5",
+    "major": true
   },
   {
     "date": "2026-09-01",
     "label": "Fable 5.1",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/claude-fable-and-mythos-5-1"
+    "source": "https://www.anthropic.com/claude-fable-and-mythos-5-1",
+    "major": true
   },
   {
     "date": "2026-09-03",
     "label": "GPT-6 Astra",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/gpt-6-astra/"
+    "source": "https://openai.com/index/gpt-6-astra/",
+    "major": true
   },
   {
     "date": "2026-09-22",
     "label": "Opus 5.5",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/claude-opus-5-5"
+    "source": "https://www.anthropic.com/claude-opus-5-5",
+    "major": true
   },
   {
     "date": "2026-09-22",
-    "label": "GPT-6 Sol / Luna",
+    "label": "GPT-6 Sol",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-6-sol-and-luna/"
+    "source": "https://openai.com/index/introducing-gpt-6-sol-and-luna/",
+    "major": true
   },
   {
     "date": "2026-09-28",

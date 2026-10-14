@@ -9,22 +9,24 @@
 <body data-project="{{id}}" data-basis="{{basis}}">
 <main class="wrap">
   <p class="crumb">codebase-trends / <select id="switch" aria-label="Project"><option>{{name}}</option></select></p>
-  <section class="panel">
-    <div class="panel-head">
-      <div class="titles">
-        <h1 id="title">{{name}}</h1>
-        <p id="subtitle" class="sub"></p>
-      </div>
-      <div id="tabs" class="seg" role="tablist"></div>
-    </div>
-    <div id="stats" class="stats"></div>
+  <header class="head">
+    <h1>{{name}}</h1>
     <p id="meta" class="meta"></p>
+  </header>
+  <section class="kpi-block">
+    <div id="kpis" class="kpis"></div>
+  </section>
+  <section class="panel">
+    <h2 id="title"></h2>
+    <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
-    <div id="controls" class="controls"></div>
-    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="chart-scroll"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
     <div id="chips" class="chips"></div>
-    <p class="footnote">Model release dates are reference markers; proximity does not establish causation.</p>
-    <p id="updated" class="footnote"></p>
+    <ol class="notes">
+      <li id="fn-window"></li>
+      <li id="fn-fix"></li>
+      <li id="fn-markers">Model release dates are reference markers; proximity does not establish causation.</li>
+    </ol>
   </section>
   <section id="drill" class="panel" hidden>
     <div class="panel-head">
