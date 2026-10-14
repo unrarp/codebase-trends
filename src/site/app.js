@@ -13,7 +13,7 @@ const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${pa
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
 const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
-const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const cap = (s) => (s === 'ci' ? 'CI' : s[0].toUpperCase() + s.slice(1));
 const narrow = () => matchMedia('(max-width: 719px)').matches;
 
 async function projectPage() {

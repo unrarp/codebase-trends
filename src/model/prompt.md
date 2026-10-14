@@ -24,5 +24,6 @@ Tie-breaks:
 
 - Prefer `changed` over `improved` when the behaviour differs for the user.
 - Use `fixed` only when the text describes wrong behaviour being corrected.
+- Never answer with a word outside the header's list. A refactor or restructuring is `changed`; a dependency or version bump is `chore` when the header lists it, else `changed`.
 
 Output exactly one line per `<textHash>\t<text>` line (none for the header), in the form `<textHash>: <category>`, and nothing else: no header, no commentary, no code fences, no blank lines.

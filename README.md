@@ -23,7 +23,7 @@ Two bases, set per project in `projects.json`:
 - **changelog**: one item per CHANGELOG.md bullet, dated by the version's npm
   publish time (`seed/claude-code-dates.json` covers the claude-code versions
   npm never listed).
-- **commits** (Bun, Codex): one item per first-parent commit on the default
+- **commits** (Codex): one item per first-parent commit on the default
   branch since `sources.git.since`; bot share counts commits whose author or a
   co-author is in the project's `bots` list or ends in `[bot]`.
 
