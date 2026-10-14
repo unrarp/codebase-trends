@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyByRule } from '../src/classify.js';
+import { parseChangelog } from '../src/adapters/changelog-md.js';
 
 const ev = (text) => ({ kind: 'changelog', text });
 
@@ -33,4 +34,17 @@ test('per-project synonyms extend the map', () => {
   assert.equal(classifyByRule(ev('Bugfixes, UI polish'), project), 'fixed');
   assert.equal(classifyByRule(ev('Bugfixes, UI polish'), {}), null);
   assert.equal(classifyByRule(ev('Fixed x'), project), 'fixed');
+});
+
+test('a leading "Scope:" lead-in is skipped to find the first word', () => {
+  // Real bullets from CHANGELOG.md.
+  const md = [
+    '## 9.9.9',
+    '- Windows: Fixed console windows flashing when spawning child processes',
+    '- VSCode: Added effort level indicator on the input border',
+    '- Self-hosted runner: Improved startup time',
+    '- IDE: Various improvements and bug fixes',
+  ].join('\n');
+  const got = parseChangelog(md, 'claude-code').map((e) => classifyByRule(e, {}));
+  assert.deepEqual(got, ['fixed', 'added', 'improved', null]);
 });
