@@ -1,0 +1,45 @@
+1ffa95ee8a02ec68f6ccd758998bcb7d4b32bcdb
+
+20	13	codex-rs/core/src/exec_tests.rs
+0c5720ea0fd2af84d7b6743a6686750fb8570ab7
+
+1	2	codex-rs/core/src/tools/handlers/apply_patch.rs
+10	20	codex-rs/core/src/tools/handlers/mod.rs
+1	2	codex-rs/core/src/tools/handlers/request_permissions.rs
+13	20	codex-rs/core/src/tools/handlers/shell_spec.rs
+0	1	codex-rs/core/src/tools/handlers/shell_spec_tests.rs
+1	8	codex-rs/core/src/tools/handlers/unified_exec/exec_command.rs
+1	14	codex-rs/core/src/tools/handlers/unified_exec/write_stdin.rs
+2	5	codex-rs/core/src/tools/handlers/view_image.rs
+9	33	codex-rs/core/src/tools/spec_plan.rs
+3	11	codex-rs/core/tests/suite/remote_env.rs
+3	8	codex-rs/core/tests/suite/scenarios.rs
+0	4	codex-rs/core/tests/suite/skills_extension.rs
+2	2	codex-rs/core/tests/suite/snapshots/all__suite__scenarios__skill_catalog_dedup__dedup_before_budgeting.snap
+5	26	codex-rs/core/tests/suite/tools.rs
+1	1	codex-rs/features/src/lib.rs
+f10ec115b73ef7d153deb986b347f6ab4a170241
+
+4	3	codex-rs/tui/src/chatwidget/session_flow.rs
+18	22	codex-rs/tui/src/chatwidget/tests/history_replay.rs
+12	1	codex-rs/tui/src/chatwidget/tests/snapshots/codex_tui__chatwidget__tests__history_replay__resumed_daybreak_banner.snap
+2b21129c6b8120e63f9ac510fe99e8b02ef43292
+
+1	0	codex-rs/analytics/src/client_tests.rs
+1	0	codex-rs/analytics/src/tests/suite/turns/requests_tests.rs
+-	-	codex-rs/app-server-protocol/schema/precomputed/app-server-exports-experimental.json.zst
+1	0	codex-rs/app-server-protocol/src/protocol/v2/tests.rs
+12	0	codex-rs/app-server-protocol/src/protocol/v2/turn.rs
+1	0	codex-rs/app-server/src/message_processor_tracing_tests.rs
+3	1	codex-rs/app-server/src/request_processors/turn_processor.rs
+23	4	codex-rs/app-server/tests/suite/v2/client_metadata.rs
+2	0	codex-rs/app-server/tests/suite/v2/realtime_conversation.rs
+3	0	codex-rs/app-server/tests/suite/v2/turn_start.rs
+4	0	codex-rs/app-server/tests/suite/v2/turn_steer.rs
+12	7	codex-rs/core/src/mcp_tool_call_tests.rs
+12	18	codex-rs/core/src/session/turn_input.rs
+16	8	codex-rs/core/src/turn_metadata.rs
+27	12	codex-rs/core/src/turn_metadata_tests.rs
+1	0	codex-rs/exec/src/lib.rs
+22	4	codex-rs/protocol/src/turn_input.rs
+2	0	codex-rs/tui/src/app_server_session.rs

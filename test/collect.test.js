@@ -75,11 +75,12 @@ test('pending = rule-null events without a classification, one line per textHash
 test('commits basis: collect appends parsed commits and derives pending', async () => {
   const dataRoot = tmp();
   const bun = { id: 'bun', basis: 'commits', sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } } };
-  const net = { gitLog: async () => fx('git-log-bun.txt') };
+  const net = { gitLog: async (git, from, use) => use({ log: () => fx('git-log-bun.txt'), numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])) }) };
   await collect([bun], { dataRoot, net });
   const events = lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).map((l) => JSON.parse(l));
   assert.equal(events.length, 6);
   assert.ok(events.every((e) => e.kind === 'commit' && e.sha === e.id));
+  assert.ok(events.every((e) => e.stats.add === 1 && e.stats.files === 1)); // stats stored on the raw event
   await collect([bun], { dataRoot, net });
   assert.equal(lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).length, 6); // known shas skipped
   readFileSync(join(dataRoot, 'bun', 'pending.jsonl'), 'utf8'); // derived

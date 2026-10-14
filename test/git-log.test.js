@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseGitLog, shallowSince, collectGitLog } from '../src/adapters/git-log.js';
+import { parseGitLog, parseNumstat, openRepo, shallowSince, collectGitLog } from '../src/adapters/git-log.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { textHash } from '../src/hash.js';
 
 // Real `git log --first-parent --format=GIT_LOG_FORMAT` output from oven-sh/bun (6 commits).
@@ -52,7 +56,7 @@ test('shallowSince is one day before from', () => {
 const project = { id: 'bun', sources: { git: { repo: 'r', branch: 'main', since: '2026-04-26' } } };
 const spy = () => {
   const calls = [];
-  return { calls, fetchRaw: async (git, from) => { calls.push({ git, from }); return raw; } };
+  return { calls, fetchRaw: async (git, from, use) => { calls.push({ git, from }); return use({ log: () => raw, numstat: () => new Map() }); } };
 };
 
 test('collect fetches from `since` when no events exist', async () => {
@@ -90,4 +94,74 @@ test('leading [Tag] groups are stripped from the subject into lowercase tags', (
   assert.ok(e.text.startsWith('stop printing error message'), e.text);
   assert.equal(e.textHash, textHash('codex', e.text));
   assert.ok(e.tags.includes('codex'));
+});
+
+// Real `git log --no-walk --numstat --diff-merges=first-parent --format=%x1e%H` output from openai/codex (4 commits).
+const numstatRaw = readFileSync(new URL('./fixtures/numstat-codex.txt', import.meta.url), 'utf8');
+
+test('parseNumstat: add, del and file count per sha; a binary file counts as a file with no lines', () => {
+  const stats = parseNumstat(numstatRaw);
+  assert.equal(stats.size, 4);
+  assert.deepEqual(stats.get('1ffa95ee8a02ec68f6ccd758998bcb7d4b32bcdb'), { add: 20, del: 13, files: 1 });
+  assert.deepEqual(stats.get('0c5720ea0fd2af84d7b6743a6686750fb8570ab7'), { add: 52, del: 157, files: 15 });
+  assert.deepEqual(stats.get('2b21129c6b8120e63f9ac510fe99e8b02ef43292'), { add: 143, del: 54, files: 18 }); // one "-\t-" binary row
+});
+
+test('openRepo.numstat runs against a real repo, including a merge measured against its first parent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ct-numstat-'));
+  const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' } }).trim();
+  git('init', '-q', '-b', 'main');
+  writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+  git('add', 'a.txt'); git('commit', '-q', '-m', 'root');
+  const root = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '-b', 'side');
+  writeFileSync(join(dir, 'b.txt'), '1\n2\n3\n');
+  git('add', 'b.txt'); git('commit', '-q', '-m', 'side');
+  git('checkout', '-q', 'main');
+  writeFileSync(join(dir, 'a.txt'), 'one\n');
+  git('commit', '-q', '-am', 'trim');
+  const trim = git('rev-parse', 'HEAD');
+  git('merge', '-q', '--no-ff', '-m', 'merge', 'side');
+  const merge = git('rev-parse', 'HEAD');
+  const stats = openRepo(dir).numstat([root, trim, merge]);
+  assert.deepEqual(stats.get(root), { add: 2, del: 0, files: 1 });
+  assert.deepEqual(stats.get(trim), { add: 0, del: 1, files: 1 });
+  assert.deepEqual(stats.get(merge), { add: 3, del: 0, files: 1 }); // vs first parent: only b.txt arrived
+  assert.deepEqual(openRepo(dir).numstat([]), new Map());
+});
+
+test('collect asks the repo for the stats of new shas only and stores them on the events', async () => {
+  const asked = [];
+  const sizes = new Map([['d578f574e565ca740729abb6c7c1f6a3f02f11b1', { add: 1, del: 2, files: 3 }]]);
+  const fetchRaw = async (git, from, use) => use({ log: () => raw, numstat: (shas) => { asked.push(...shas); return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)])); } });
+  const all = await collectGitLog(project, [], fetchRaw);
+  assert.equal(all.length, 3);
+  assert.deepEqual(asked.sort(), all.map((e) => e.sha).sort());
+  const withStats = all.filter((e) => 'stats' in e);
+  assert.equal(withStats.length, 1);
+  assert.deepEqual(withStats[0].stats, { add: 1, del: 2, files: 3 });
+  asked.length = 0;
+  const out = await collectGitLog(project, [{ sha: all[0].sha }], fetchRaw);
+  assert.equal(asked.length, 2); // the known sha is not measured again
+  assert.ok(out.every((e) => e.sha !== all[0].sha));
+});
+
+test('a commit at the shallow boundary gets no stats: with its parent cut off it would be sized against an empty tree', () => {
+  const src = mkdtempSync(join(tmpdir(), 'ct-shallow-src-'));
+  const env = { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' };
+  const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env }).trim();
+  git(src, 'init', '-q', '-b', 'main');
+  writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(500));
+  git(src, 'add', 'big.txt');
+  execFileSync('git', ['-C', src, 'commit', '-q', '-m', 'old'], { env: { ...env, GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z' } });
+  writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(501));
+  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'one line'], { env: { ...env, GIT_COMMITTER_DATE: '2026-06-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-01T00:00:00Z' } });
+  writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(502));
+  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'another line'], { env: { ...env, GIT_COMMITTER_DATE: '2026-06-02T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-02T00:00:00Z' } });
+  const [newer, boundary] = git(src, 'log', '--format=%H', '-2').split('\n');
+  const clone = mkdtempSync(join(tmpdir(), 'ct-shallow-clone-'));
+  execFileSync('git', ['clone', '-q', '--no-checkout', '--shallow-since=2026-05-01', `file://${src}`, clone], { env }); // a plain path would not be shallow
+  const stats = openRepo(clone).numstat([newer, boundary]);
+  assert.deepEqual(stats.get(newer), { add: 1, del: 0, files: 1 });
+  assert.equal(stats.has(boundary), false); // not { add: 501, del: 0, files: 1 }
 });

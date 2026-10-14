@@ -69,6 +69,7 @@ test('sparse commits project: zero rows for gap days and weeks, UTC day shift', 
   assert.equal(d['2026-08-04'].counts.chore + d['2026-08-04'].counts.docs, 2); // maintenance only
   assert.equal(d['2026-08-21'].counts.revert, 1);
   assert.ok(daily.concat(weekly).every((r) => !('botShare' in r)));
+  assert.ok(daily.every((r) => !('lines' in r))); // sizes are weekly only
   assert.equal(weekly.find((r) => r.d === '2026-08-10').total, 0);
   const s = j('data/sparse/summary.json');
   assert.deepEqual(s.totals.bySource, { rule: 3, model: 1, pending: 1 });
@@ -128,4 +129,16 @@ test('a rebuild drops month shards that no longer have events', () => {
   writeFileSync(stale, '[]\n');
   build({ root: ROOT, out: again, now: new Date(NOW) });
   assert.equal(existsSync(stale), false);
+});
+
+test('commits basis: weekly rows carry the sorted add+del sizes of the fixes that have stats', () => {
+  const w = Object.fromEntries(j('data/sparse/weekly.json').map((r) => [r.d, r]));
+  assert.deepEqual(w['2026-08-03'].lines, { fixed: [15] }); // a1 fixed; b2 chore and c3 docs are not fixes
+  assert.deepEqual(w['2026-08-17'].lines, { fixed: [40] }); // d4 revert is a fix
+  assert.deepEqual(w['2026-09-14'].lines, { fixed: [] }); // e5 is pending → other
+  assert.deepEqual(w['2026-08-10'].lines, { fixed: [] });
+  assert.ok(j('data/claude-code/weekly.json').every((r) => !('lines' in r))); // changelog items have no size
+  const aug = j('data/sparse/months/2026-08.json');
+  assert.deepEqual(aug.find((e) => e.id === 'a1').stats, { add: 10, del: 5, files: 2 });
+  assert.equal('stats' in aug.find((e) => e.id === 'c3'), false);
 });

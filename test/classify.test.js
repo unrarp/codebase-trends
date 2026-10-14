@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyByRule, CATEGORIES } from '../src/classify.js';
+import { readFileSync } from 'node:fs';
+import { classifyByRule, CATEGORIES, COUNTED, FIXES } from '../src/classify.js';
 import { parseChangelog } from '../src/adapters/changelog-md.js';
 
 const ev = (text) => ({ kind: 'changelog', text });
@@ -82,4 +83,14 @@ test('commit first-word fallback, incl. Scope: lead-in and project synonyms', ()
 test('commit rule categories stay inside CATEGORIES.commits', () => {
   const texts = [...Object.keys(PREFIXES).map((p) => `${p}: x`), 'Revert x', 'Fix x', 'Add x', 'Improve x', 'Change x', 'Remove x'];
   for (const t of texts) assert.ok(CATEGORIES.commits.includes(cm(t)), t);
+});
+
+test('COUNTED and FIXES match the site\'s GROUPS (src/site/app.js), which draws and counts the same buckets', () => {
+  const app = readFileSync(new URL('../src/site/app.js', import.meta.url), 'utf8');
+  const groups = [...app.match(/const GROUPS = \[\n.*?\n\];/s)[0].matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g)]
+    .map((m) => [m[1], [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1])]);
+  assert.equal(groups.length, 4);
+  assert.deepEqual(groups.flatMap(([, cats]) => cats).sort(), [...COUNTED].sort());
+  assert.deepEqual(groups.find(([k]) => k === 'fixed')[1].concat(['revert']).sort(), [...FIXES].sort());
+  assert.ok(COUNTED.every((c) => CATEGORIES.commits.includes(c)));
 });

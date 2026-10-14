@@ -43,3 +43,21 @@ test('rejects an annotation whose major flag is not a boolean', () => {
   const errs = violationsAfter('data/annotations.json', (ann) => { ann[0].major = 'yes'; return ann; });
   assert.ok(errs.some((e) => /annotations\.json: bad entry/.test(e)), errs.join('\n'));
 });
+
+test('commits basis: weekly lines.fixed must be sorted non-negative integers, no more than the row has fixes', () => {
+  const unsorted = violationsAfter('data/sparse/weekly.json', (rows) => { rows[0].lines.fixed = [15, 3]; rows[0].counts.fixed = 2; return rows; });
+  assert.ok(unsorted.some((e) => /lines/.test(e)), unsorted.join('\n'));
+  const extraKey = violationsAfter('data/sparse/weekly.json', (rows) => { rows[0].lines.all = [15]; return rows; });
+  assert.ok(extraKey.some((e) => /lines/.test(e)), extraKey.join('\n'));
+  assert.ok(unsorted.some((e) => /lines/.test(e)), unsorted.join('\n'));
+  const negative = violationsAfter('data/sparse/weekly.json', (rows) => { rows[0].lines.fixed = [-1]; return rows; });
+  assert.ok(negative.some((e) => /lines/.test(e)), negative.join('\n'));
+  const tooMany = violationsAfter('data/sparse/weekly.json', (rows) => { rows[0].lines.fixed = [15, 15]; return rows; });
+  assert.ok(tooMany.some((e) => /lines/.test(e)), tooMany.join('\n'));
+  const missing = violationsAfter('data/sparse/weekly.json', (rows) => { delete rows[0].lines; return rows; });
+  assert.ok(missing.some((e) => /lines/.test(e)), missing.join('\n'));
+  const onChangelog = violationsAfter('data/claude-code/weekly.json', (rows) => { rows[0].lines = { fixed: [] }; return rows; });
+  assert.ok(onChangelog.some((e) => /lines/.test(e)), onChangelog.join('\n'));
+  const badStats = violationsAfter('data/sparse/months/2026-08.json', (evs) => { evs[0].stats = { add: 1 }; return evs; });
+  assert.ok(badStats.some((e) => /stats/.test(e)), badStats.join('\n'));
+});

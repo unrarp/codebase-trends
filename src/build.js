@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSyn
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readJsonl } from './store.js';
-import { classifyByRule, CATEGORIES } from './classify.js';
+import { classifyByRule, CATEGORIES, FIXES } from './classify.js';
 
 /*
  * Output under docs/data/ (validate.js checks the invariants):
@@ -11,9 +11,11 @@ import { classifyByRule, CATEGORIES } from './classify.js';
  *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
  *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions? } }   versions: changelog
  *   <project>/daily.json     [{ d, counts, total }]  every calendar day firstDate..lastDate
- *   <project>/weekly.json    same rows, d = ISO-week Monday, every week
+ *   <project>/weekly.json    same rows, d = ISO-week Monday, every week; commits basis adds lines: { fixed } — add+del
+ *                            of each FIXES commit that has stats, as a list (ascending, canonical) rather than a median,
+ *                            so the browser can pool weeks into any window and take an exact median
  *   <project>/releases.json  [{ version, ts, count }]                    changelog basis only
- *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, url? }]
+ *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, stats?, url? }]
  * Ratios such as the site's Fixes % are derived in the browser from counts, never stored.
  */
 
@@ -67,6 +69,7 @@ function deriveEvents(project, root) {
     ev.tags = e.tags;
     if (e.author) ev.author = e.author;
     if (project.basis === 'commits') ev.bot = isBot(e, project);
+    if (e.stats) ev.stats = e.stats;
     const tpl = project.basis === 'commits' ? project.links?.commit : project.links?.release;
     if (tpl) ev.url = fill(tpl, { version: e.version, sha: e.sha });
     out.push(ev);
@@ -74,14 +77,16 @@ function deriveEvents(project, root) {
   return out.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0)); // stable: ties keep file order
 }
 
-function aggregate(events, project, keyOf, keys) {
+function aggregate(events, project, keyOf, keys, { lines = false } = {}) {
   const cats = CATEGORIES[project.basis];
-  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0 }]));
+  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: { fixed: [] } } : {}) }]));
   for (const e of events) {
     const r = by.get(keyOf(e.ts.slice(0, 10)));
     r.counts[e.category]++;
     r.total++;
+    if (lines && e.stats && FIXES.includes(e.category)) r.lines.fixed.push(e.stats.add + e.stats.del);
   }
+  if (lines) for (const r of by.values()) r.lines.fixed.sort((a, b) => a - b);
   return [...by.values()];
 }
 
@@ -94,7 +99,7 @@ function buildProject(project, root, out, generatedAt) {
   const days = firstDate ? eachDay(firstDate, lastDate) : [];
   const weeks = firstDate ? eachDay(mondayOf(firstDate), mondayOf(lastDate), 7) : [];
   const daily = aggregate(events, project, (d) => d, days);
-  const weekly = aggregate(events, project, mondayOf, weeks);
+  const weekly = aggregate(events, project, mondayOf, weeks, { lines: project.basis === 'commits' });
 
   const cats = CATEGORIES[project.basis];
   const totals = {

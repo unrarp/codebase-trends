@@ -22,6 +22,8 @@ import { collectGitLog, fetchGitLog } from './adapters/git-log.js';
  * @property {string[]} tags     e.g. 'vscode' from [VSCode], 'regression:2.1.296', 'pr:53969'
  * @property {string} [author]   commits basis
  * @property {string[]} [coauthors] commits basis: Co-authored-by names
+ * @property {{add: number, del: number, files: number}} [stats] commits basis: lines added/deleted and files touched vs the
+ *                              first parent; absent when the commit was collected before stats were recorded
  *
  * data/<project>/dates.json (changelog basis): { [version]: ISO ts }, npm publish times ∪ seed/<project>-dates.json.
  */

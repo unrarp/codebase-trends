@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES } from './classify.js';
+import { CATEGORIES, FIXES } from './classify.js';
 import { eachDay, mondayOf } from './build.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,6 +50,11 @@ export function validate(out) {
         if (!DATE.test(r.d) || !r.counts || typeof r.total !== 'number') { bad(w, 'bad row shape'); continue; }
         if (sum(Object.values(r.counts)) !== r.total) bad(w, 'counts do not sum to total');
         if (Object.keys(r.counts).some((c) => !cats.includes(c))) bad(w, 'category outside basis set');
+        if (name === 'weekly' && p.basis === 'commits') {
+          const sorted = (xs) => Array.isArray(xs) && xs.every((x, i) => Number.isInteger(x) && x >= 0 && (i === 0 || xs[i - 1] <= x));
+          if (!r.lines || !sorted(r.lines.fixed) || Object.keys(r.lines).join() !== 'fixed') bad(w, 'lines must be { fixed: ascending non-negative integers }');
+          else if (r.lines.fixed.length > sum(FIXES.map((c) => r.counts[c] ?? 0))) bad(w, 'lines.fixed has more sizes than the row has fixes');
+        } else if ('lines' in r) bad(w, 'lines only on weekly rows of the commits basis');
       }
       if (sum(rows.map((r) => r.total)) !== totals.events) bad(f, `Σ total ${sum(rows.map((r) => r.total))} != summary.totals.events ${totals.events}`);
     }
@@ -70,6 +75,7 @@ export function validate(out) {
         if (!cats.includes(e.category)) bad(w, `category ${e.category} outside basis set`);
         if (!['rule', 'model', 'pending'].includes(e.source)) bad(w, `bad source ${e.source}`);
         if (typeof e.text !== 'string' || !Array.isArray(e.tags) || !e.id) bad(w, 'bad shape');
+        if ('stats' in e && !['add', 'del', 'files'].every((k) => Number.isInteger(e.stats?.[k]) && e.stats[k] >= 0)) bad(w, 'stats must be { add, del, files } non-negative integers');
       }
     }
     if (emitted !== totals.events) bad(`${dir}/months`, `${emitted} events != summary.totals.events ${totals.events}`);

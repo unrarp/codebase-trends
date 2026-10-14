@@ -102,9 +102,14 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(m[0].y).not.toBeNull(); // badges are drawn in both viewports
     });
 
-    test('sparse commits project shows three KPI tiles', async ({ page }) => {
+    test('sparse commits project shows four KPI tiles, the last one lines per fix with its own note', async ({ page }) => {
       await open(page, 'sparse/');
-      await expect(page.locator('#kpis .kpi')).toHaveCount(3);
+      await expect(page.locator('#kpis .kpi')).toHaveCount(4);
+      await expect(page.locator('#kpis .kpi').last().locator('.k')).toContainText('Lines per fix (median)');
+      await expect(page.locator('#fn-lines')).toBeVisible();
+      await expect(page.locator('#fn-lines')).toContainText('added + deleted');
+      await open(page, 'claude-code/');
+      await expect(page.locator('#fn-lines')).toBeHidden(); // changelog items have no size; the note is not numbered
     });
 
     test('KPI tiles name the window and compare with the prior period', async ({ page }) => {
@@ -266,4 +271,19 @@ test('resizing across the breakpoint moves the count axis and scrolls to the lat
   const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft }; });
   expect(m.sw).toBeGreaterThan(m.cw);
   expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
+});
+
+test('lines per fix is the median over the window\'s sizes, compared with the prior window', async ({ page }) => {
+  await page.route('**/data/sparse/weekly.json', async (route) => {
+    const rows = JSON.parse(readFileSync(join(out, 'data/sparse/weekly.json'), 'utf8'));
+    for (const r of rows) {
+      if (r.d === '2026-09-28') r.lines = { fixed: [10, 30] };
+      if (r.d === '2026-10-05') r.lines = { fixed: [20] };
+    }
+    await route.fulfill({ json: rows });
+  });
+  await open(page, 'sparse/');
+  const tile = page.locator('#kpis .kpi').last();
+  await expect(tile.locator('.v')).toHaveText('20'); // median of 10, 20, 30 in the last 4 complete weeks
+  await expect(tile.locator('.ref')).toHaveText('−50% vs prior period (40)'); // the revert d4 (40 lines) in the 4 weeks before
 });

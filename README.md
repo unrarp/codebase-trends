@@ -19,9 +19,11 @@ says how many items were set aside. Every project page shows the same things,
 so projects compare on one footing:
 
 1. **KPI tiles**: items per week, new features (`added`) per week, fixes as a
-   percentage of changes ("Fixes %"), and (changelog basis) versions released per
-   week, averaged over the last 4 complete weeks, each with its signed change
-   vs the 4 weeks before underneath.
+   percentage of changes ("Fixes %"), and either versions released per week
+   (changelog basis) or the median lines per fix (commits basis: lines added +
+   deleted by each `fixed` or `revert` commit, so a growing number means fixes
+   are getting bigger), over the last 4 complete weeks, each with its signed
+   change vs the 4 weeks before underneath.
    Numbered notes under the chart define what is counted, the windows and
    the formula; the header, tiles and legend link to them.
 2. **One chart**: counted items per week by bucket as stacked bars, with the
@@ -42,13 +44,15 @@ Two bases, set per project in `projects.json`:
   publish time (`seed/claude-code-dates.json` covers the claude-code versions
   npm never listed).
 - **commits** (Codex): one item per first-parent commit on the default
-  branch since `sources.git.since`; a commit whose author or co-author is in
-  the project's `bots` list or ends in `[bot]` is flagged in the drill-down.
+  branch since `sources.git.since`, with its diff size (`stats`: lines added,
+  deleted, files, against the first parent); a commit whose author or
+  co-author is in the project's `bots` list or ends in `[bot]` is flagged in
+  the drill-down.
 
 ## Data flow
 
 ```
-projects.json ─► src/collect.js ─► data/<project>/events.jsonl  (append-only raw facts)
+projects.json ─► src/collect.js ─► data/<project>/events.jsonl  (append-only raw facts; backfill-stats.js is the one rewrite, adding a field)
                                    data/<project>/dates.json    (changelog basis)
                                    data/<project>/pending.jsonl (gitignored)
 pending ─► model (routine agent or scripts/classify-local.sh)
@@ -92,7 +96,11 @@ run commits.
 
 1. Add an entry to `projects.json` (`id`, `name`, `basis`, `sources`, `links`,
    `annotations`, and `bots` for commits basis) locally; don't push it yet.
-2. Run `scripts/classify-local.sh <id>` until nothing is pending.
+2. Run `scripts/classify-local.sh <id>` until nothing is pending. Commits
+   basis: the routine's blobless clone sizes new commits as they arrive, but
+   the history collected before this ran has no `stats`; give it some with
+   `node scripts/backfill-stats.js <id> <full-clone-dir>` against a full clone
+   (`git clone --no-checkout <repo>`), as was done once for Codex.
 3. Run `npm run build && npm run check`, then commit `projects.json`, `data/`
    and `docs/` together (collect runs every project, so other projects may have
    new data too) and push.
@@ -135,5 +143,7 @@ the model-release markers, each with its announcement URL.
   rule relabels all history on the next build with no migration.
 - **Collection state is derived, not stored.** The changelog basis collects
   versions not yet in `events.jsonl`; the commits basis re-reads history since
-  `sources.git.since` (a blob-less clone takes seconds) and skips known shas.
+  `sources.git.since` (a blob-less clone takes seconds) and skips known shas;
+  only the new ones are sized, each fetching its blobs on demand (~0.4 s per
+  commit).
   A bullet edited under an already-collected version is ignored.
