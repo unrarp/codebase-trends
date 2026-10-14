@@ -77,5 +77,5 @@
 {"d":"2026-09-21","counts":{"added":94,"fixed":128,"changed":98,"improved":58,"removed":12,"other":0,"revert":0,"chore":14,"test":24,"docs":0,"ci":1},"total":429,"fixShare":0.3282,"botShare":0},
 {"d":"2026-09-28","counts":{"added":84,"fixed":96,"changed":65,"improved":46,"removed":9,"other":4,"revert":0,"chore":10,"test":16,"docs":3,"ci":0},"total":333,"fixShare":0.3158,"botShare":0},
 {"d":"2026-10-05","counts":{"added":91,"fixed":93,"changed":39,"improved":24,"removed":11,"other":0,"revert":0,"chore":8,"test":11,"docs":2,"ci":2},"total":281,"fixShare":0.3605,"botShare":0},
-{"d":"2026-10-12","counts":{"added":25,"fixed":37,"changed":23,"improved":15,"removed":4,"other":0,"revert":0,"chore":7,"test":7,"docs":0,"ci":1},"total":119,"fixShare":0.3558,"botShare":0}
+{"d":"2026-10-12","counts":{"added":26,"fixed":37,"changed":25,"improved":15,"removed":4,"other":0,"revert":0,"chore":8,"test":8,"docs":0,"ci":1},"total":124,"fixShare":0.3458,"botShare":0}
 ]
