@@ -28,9 +28,9 @@ so projects compare on one footing:
    the formula; the header, tiles and legend link to them.
 2. **One chart**: counted items per week by bucket as stacked bars, with the
    4-week rolling fix share, `(fixed + revert) / counted items`, drawn over
-   them on a right-hand 0–100% axis. Clicking a week lists its counted items;
-   `#YYYY-MM-DD` deep-links a day's list. On narrow screens the chart scrolls
-   sideways and opens at the latest week.
+   them on a right-hand 0–100% axis. Clicking a week lists its counted items
+   (on touch screens, tap it twice). `#YYYY-MM-DD` deep-links a day's list. On
+   narrow screens the chart scrolls sideways and opens at the latest week.
 
 Only model releases flagged `major` in `annotations.json` are drawn, as
 numbered markers; the other entries stay in the file unused. The site root opens the

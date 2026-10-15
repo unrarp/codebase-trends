@@ -39,6 +39,8 @@ async function open(page, path, at = NOW) {
   return errors;
 }
 const slot = (page) => page.evaluate(() => { const s = __chart.scales.x; return s.getPixelForValue(1) - s.getPixelForValue(0); });
+// Chart.js handles canvas events once per animation frame, so two synthetic clicks in one frame collapse into the last.
+const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 }], ['mobile 375x812', { width: 375, height: 812 }]]) {
   test.describe(name, () => {
@@ -54,7 +56,7 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(errors).toEqual([]);
     });
 
-    test('clicking a bar opens the drill-down table', async ({ page }) => {
+    test('with a pointer, one click highlights the week and opens its list, changelog items grouped under their version', async ({ page }) => {
       await open(page, 'claude-code/');
       await page.locator('#chart').scrollIntoViewIfNeeded();
       const { x, y } = await page.evaluate(() => {
@@ -64,23 +66,29 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
         const box = __chart.canvas.getBoundingClientRect();
         return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3 };
       });
-      await page.mouse.click(x, y);
+      await page.mouse.move(x, y); await frame(page);
+      await expect(page.locator('#drill')).toBeHidden(); // hovering only reads
+      expect(await page.evaluate(() => __chart.tooltip.footer)).toEqual(['Click to list']); // the hint is there before any click
+      expect(await page.evaluate(() => __chart.tooltip.title[0])).toMatch(/^\w+ \d+ – (\w+ )?\d+ · \d+ items$/); // short enough for a phone-width tooltip
+      await page.mouse.click(x, y); await frame(page);
       await expect(page.locator('#drill')).toBeVisible();
-      expect(await page.locator('#drill tbody tr.ev').count()).toBeGreaterThan(0);
-      await expect(page.locator('#drill-table thead th').first()).toHaveText('Version'); // changelog basis
+      expect(await page.evaluate(() => __chart.$selected)).toEqual(expect.objectContaining({ width: expect.any(Number) })); // the listed week is highlighted
+      expect(await page.locator('#drill li.ev').count()).toBeGreaterThan(0);
+      await expect(page.locator('#drill-list h3 a').first()).toHaveText(/^\d+\.\d+\.\d+$/); // the version heads its group
+      await expect(page.locator('#drill li.ev .ref')).toHaveCount(0); // and is not repeated per item
     });
 
-    test('commits basis: the first drill-down column is the commit', async ({ page }) => {
+    test('commits basis: each item links its sha, the day view has no group header', async ({ page }) => {
       await open(page, 'sparse/#2026-08-21');
       await expect(page.locator('#drill')).toBeVisible();
-      await expect(page.locator('#drill-table thead th').first()).toHaveText('Commit');
-      await expect(page.locator('#drill tbody tr.ev td').first()).toHaveAttribute('data-label', 'Commit');
+      await expect(page.locator('#drill li.ev .ref').first()).toHaveText(/^[0-9a-f]{1,7}$/);
+      await expect(page.locator('#drill-list h3')).toHaveCount(0);
     });
 
-    test('#YYYY-MM-DD opens the table on load, no horizontal overflow', async ({ page }) => {
+    test('#YYYY-MM-DD opens the list on load, no horizontal overflow', async ({ page }) => {
       const errors = await open(page, 'claude-code/#2026-08-31');
       await expect(page.locator('#drill')).toBeVisible();
-      await expect(page.locator('#drill tbody tr.ev')).toHaveCount(4);
+      await expect(page.locator('#drill li.ev')).toHaveCount(4);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect(errors).toEqual([]);
     });
@@ -235,14 +243,74 @@ test('the week list and tooltip total exclude set-aside items and label rows by 
   const { x, y, total } = await page.evaluate((week) => {
     const i = __chart.data.labels.indexOf(week);
     const box = __chart.canvas.getBoundingClientRect();
-    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, total: __chart.options.plugins.tooltip.callbacks.footer([{ dataIndex: i }]) };
+    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, total: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]) };
   }, week);
-  expect(total).toBe(`Total: ${counted}`); // tooltip total matches the stack, not the stored row total
+  expect(total).toContain(` · ${counted} items`); // tooltip total matches the stack, not the stored row total
   await page.mouse.click(x, y);
   await expect(page.locator('#drill')).toBeVisible();
   await expect(page.locator('#drill-title')).toContainText(`${counted} changelog items`);
-  expect(await page.locator('#drill tbody tr.ev').count()).toBe(counted);
-  await expect(page.locator('#drill tbody .tag', { hasText: 'other' })).toHaveCount(0);
+  expect(await page.locator('#drill li.ev').count()).toBe(counted);
+  await expect(page.locator('#drill li .tag', { hasText: 'other' })).toHaveCount(0);
+});
+
+test('a finger drag over the chart does not move the tooltip; a tap picks the week, a second tap lists it', async ({ browser }) => {
+  const page = await (await browser.newContext({ hasTouch: true, viewport: { width: 375, height: 812 } })).newPage();
+  await open(page, 'claude-code/');
+  await page.locator('#chart').scrollIntoViewIfNeeded();
+  const active = await page.evaluate(async () => {
+    const c = __chart.canvas; const box = c.getBoundingClientRect();
+    const at = (i) => ({ clientX: box.left + __chart.getDatasetMeta(0).data[i].x, clientY: box.top + __chart.chartArea.bottom - 3 });
+    for (const [type, i] of [['touchstart', 1], ['touchmove', 2], ['touchmove', 3]]) {
+      const touch = new Touch({ identifier: 1, target: c, ...at(i) });
+      c.dispatchEvent(new TouchEvent(type, { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 20))); // Chart.js handles moves on the next frame
+    }
+    return { n: __chart.getActiveElements().length, opacity: __chart.tooltip.opacity };
+  });
+  expect(active).toEqual({ n: 0, opacity: 0 });
+  await expect(page.locator('#drill')).toBeHidden();
+  const { x, y } = await page.evaluate(() => { const box = __chart.canvas.getBoundingClientRect(); return { x: box.left + __chart.getDatasetMeta(0).data[2].x, y: box.top + __chart.chartArea.bottom - 3 }; });
+  await page.touchscreen.tap(x, y); await frame(page);
+  await expect(page.locator('#drill')).toBeHidden(); // no hover: the first tap only shows the popover
+  expect(await page.evaluate(() => [__chart.tooltip.opacity, __chart.tooltip.footer])).toEqual([1, ['Tap again to list']]);
+  await page.touchscreen.tap(x, y);
+  await expect(page.locator('#drill')).toBeVisible();
+  await page.locator('#drill-close').tap(); await frame(page); // closing forgets the pick: the next tap reads again
+  expect(await page.evaluate(() => __chart.$selected)).toBeNull();
+  await page.touchscreen.tap(x, y); await frame(page);
+  await expect(page.locator('#drill')).toBeHidden();
+});
+
+test('hovering a week with no items and no rolling share shows a tooltip without throwing', async ({ page }) => {
+  const errors = await open(page, 'sparse/');
+  await page.locator('#chart').scrollIntoViewIfNeeded();
+  const { x, y, title } = await page.evaluate(() => {
+    const i = __chart.data.labels.length - 1; // the fixture's last weeks are empty, so the rolling share is null there
+    const box = __chart.canvas.getBoundingClientRect();
+    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, title: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]) };
+  });
+  expect(title).toMatch(/ · 0 commits so far$/);
+  await page.mouse.move(x, y); await frame(page);
+  expect(await page.evaluate(() => [__chart.tooltip.opacity, __chart.tooltip.title[0]])).toEqual([1, title]);
+  expect(errors).toEqual([]);
+});
+
+test('dates show the year only when more than a year old', async ({ page }) => {
+  await open(page, 'claude-code/#2026-08-31'); // NOW is 2026-10-14
+  await expect(page.locator('#drill-title')).toHaveText(/^Aug 31 · /);
+  await expect(page.locator('#drill-list h3').first()).toContainText(' · Aug 31 · ');
+  await page.clock.setFixedTime(NOW + 400 * 86_400_000); // a year on: same URL, so reload rather than navigate
+  await page.reload();
+  await expect(page.locator('#drill-title')).toHaveText(/^Aug 31, 2026 · /);
+});
+
+test('an old week across New Year names both years', async ({ page }) => {
+  await page.route('**/data/claude-code/weekly.json', async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: [{ d: '2024-12-30', counts: {}, total: 0, fixShare: null }, ...(await res.json())] });
+  });
+  await open(page, 'claude-code/');
+  expect(await page.evaluate(() => __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: 0 }]))).toBe('Dec 30, 2024 – Jan 5, 2025 · 0 items');
 });
 
 test('fewer than four complete weeks: the note names the shorter window', async ({ page }) => {

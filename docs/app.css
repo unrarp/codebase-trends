@@ -8,7 +8,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .crumb select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
 .head { margin: 0 0 14px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; min-width: 0; }
-.panel-head { display: flex; flex-wrap: wrap; gap: 12px 16px; justify-content: space-between; align-items: flex-start; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
 h1 { font-size: 20px; margin: 0 0 4px; }
 h2 { font-size: 16px; margin: 0; }
 .sub, .meta, .footnote { color: var(--muted); margin: 4px 0; }
@@ -41,26 +41,33 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .chip .n { color: var(--marker); font-weight: 600; }
 .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--marker); flex: none; }
 
-.btn { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; }
-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
-th { color: var(--muted); font-weight: 500; }
-tr.day th { background: var(--bg); color: var(--text); }
-.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; color: #0d0f12; }
+.btn { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font-size: 12px; line-height: 1.5; color: var(--muted); } /* quiet: the title is the thing */
+.btn:hover { color: var(--text); }
+/* The week's list: a header per group (day or version), one line per item, capped so a 500-item week scrolls here, not the page. */
+.drill-list { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; margin-top: 10px; }
+.drill-list h3 { position: sticky; top: 0; z-index: 1; background: var(--panel); font-size: 13px; font-weight: 500; margin: 0; padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
+.drill-list ul { list-style: none; margin: 0; padding: 0; }
+.ev { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ev .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ev .ref { flex: none; font-size: 12px; font-family: ui-monospace, monospace; }
+.tag { flex: none; display: inline-block; min-width: 64px; text-align: center; padding: 1px 8px; border-radius: 999px; font-size: 12px; color: #0d0f12; }
 .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+
+/* In-page moves (opening the list, note links) scroll smoothly and the list eases in, unless the user asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  #drill { transition: opacity .25s ease-out, translate .25s ease-out; }
+  @starting-style { #drill { opacity: 0; translate: 0 10px; } }
+}
 
 @media (max-width: 719px) {
   .wrap { padding: 8px; }
   .panel, .kpi { padding: 14px 12px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi .v { font-size: 22px; }
-  .btn, .crumb select { min-height: 44px; }
+  .crumb select { min-height: 44px; }
   .chip .date { display: none; }
   .chip { padding: 3px 8px; }
-  #drill-table, #drill-table tbody, #drill-table tr, #drill-table td { display: block; width: 100%; }
-  #drill-table thead { display: none; }
-  tr.ev { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; padding: 4px 0; }
-  tr.ev td { border: 0; padding: 4px 10px; }
-  tr.ev td::before { content: attr(data-label) ": "; color: var(--muted); }
-  tr.day th { display: block; }
+  .ev { flex-wrap: wrap; gap: 4px 8px; }
+  .ev .text { flex-basis: 100%; order: 1; }
 }

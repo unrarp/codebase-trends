@@ -24,9 +24,20 @@ const el = (tag, { dataset, ...props } = {}, ...kids) => { const n = Object.assi
 const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); });
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
-const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+/** Within the last year a date needs no year; `year` asks for one on older dates. */
+const recent = (d) => Date.parse(`${d}T00:00:00Z`) > Date.now() - 365 * DAY;
+const fmt = (d, year) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year && !recent(d) ? { year: 'numeric' } : {}), timeZone: 'UTC' });
 const weekEnd = (d) => dayOf(Date.parse(`${d}T00:00:00Z`) + 6 * DAY);
 const span = (ws) => `${fmt(ws[0].d)} – ${fmt(weekEnd(ws.at(-1).d))}`;
+/** One week as "Oct 5 – 11" or "Sep 28 – Oct 4"; with `year`, an older week reads "Oct 6 – 12, 2025" or "Dec 30, 2024 – Jan 5, 2025". */
+const weekSpan = (d, year) => {
+  const e = weekEnd(d);
+  const [a, b] = [d, e].map((x) => new Date(`${x}T00:00:00Z`));
+  const withYear = year && !recent(d);
+  const start = withYear && a.getUTCFullYear() !== b.getUTCFullYear() ? `${fmt(d)}, ${a.getUTCFullYear()}` : fmt(d);
+  const end = a.getUTCMonth() === b.getUTCMonth() ? b.getUTCDate() : fmt(e);
+  return `${start} – ${end}${withYear ? `, ${b.getUTCFullYear()}` : ''}`;
+};
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const pct = (x) => `${Math.round(x * 100)}%`;
 const LAST = 'codebase-trends:project';
@@ -34,6 +45,7 @@ const LAST = 'codebase-trends:project';
 const remembered = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
 const remember = (id) => { try { localStorage.setItem(LAST, id); } catch {} };
 const narrow = () => matchMedia('(max-width: 719px)').matches;
+const hover = () => matchMedia('(hover: hover)').matches; // a pointer reads the tooltip by hovering, so one click acts; touch needs a tap to read first
 
 const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
 const fixes = (r) => (r.counts.fixed ?? 0) + (r.counts.revert ?? 0);
@@ -59,8 +71,6 @@ async function projectPage() {
   const now = Date.now();
   const generatedAt = Date.parse(summary.generatedAt);
   const noun = changelog ? 'Changelog items' : 'Commits';
-  const refLabel = changelog ? 'Version' : 'Commit'; // what the drill-down's first column links to
-  $('drill-table').tHead.rows[0].cells[0].textContent = refLabel;
 
   // Weekly rows extended with empty rows up to the current week so the not-yet-collected span is on the axis.
   const rows = [...weeklyRaw];
@@ -83,7 +93,7 @@ async function projectPage() {
   const perWeek = (f) => (ws) => (ws.length ? f(ws) / ws.length : null);
   const NOTES = ['counted', 'window', 'fix', ...(changelog ? [] : ['lines'])]; // hidden notes are not numbered
   const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
-  $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
+  $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', ...(recent(dayOf(generatedAt)) ? {} : { year: 'numeric' }), hour: 'numeric', minute: '2-digit' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
   const FIX = 'Fixes %';
   const SIZE = 'Commit size';
   const sign = (x) => (x > 0 ? '+' : x < 0 ? '−' : '±');
@@ -129,11 +139,19 @@ async function projectPage() {
     const slot = sx.getPixelForValue(1) - sx.getPixelForValue(0);
     return sx.getPixelForValue(0) - slot / 2 + ((t - anchor) / WEEK) * slot;
   };
+  let selected = -1; // index of the week last clicked: highlighted; on touch, a second tap on it opens its list
   const furniture = {
     id: 'furniture',
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea: a } = chart;
       ctx.save();
+      chart.$selected = null;
+      if (selected >= 0) { // a lighter column behind the picked week's bars
+        const x0 = Math.max(a.left, toX(chart, anchor + selected * WEEK));
+        const x1 = Math.min(a.right, toX(chart, anchor + (selected + 1) * WEEK));
+        chart.$selected = { x0, x1, width: Math.max(0, x1 - x0) };
+        ctx.fillStyle = 'rgba(232,234,237,.1)'; ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
+      }
       const x0 = Math.max(a.left, toX(chart, generatedAt));
       const x1 = Math.min(a.right, toX(chart, now));
       chart.$hatch = { x0, x1, width: Math.max(0, x1 - x0) };
@@ -165,17 +183,21 @@ async function projectPage() {
       ctx.restore();
     },
   };
+  const weekTitle = (i) => `${weekSpan(rows[i].d, true)} · ${shown(rows[i])} ${changelog ? 'items' : 'commits'}${i === curIdx ? ' so far' : ''}`; // short: it must fit a phone-width tooltip
   const onClick = (e, _els, ch) => {
     const hit = ch.getElementsAtEventForMode(e, 'index', { intersect: false }, true)[0];
-    if (hit) openDrill(rows[hit.index].d, 'week');
+    if (!hit) return;
+    const again = hit.index === selected;
+    selected = hit.index;
+    chart.update();
+    if (hover() || again) openDrill(rows[selected].d, 'week');
   };
-  const weekTitle = (items) => `Week of ${fmt(items[0].label, true)}${items[0].dataIndex === curIdx ? ' (in progress)' : ''}`;
 
   // ---- fix share: rolling window over the preceding weeks, nothing past the current week ----
   const rolling = rows.map((_, i) => (curIdx >= 0 && i > curIdx ? null : pooledFix(rows.slice(Math.max(0, i - ROLL + 1), i + 1))));
   $('title').textContent = `${noun} per week`;
   $('subtitle').replaceChildren(`${changelog ? 'Changelog items, by the week their version shipped' : 'First-parent commits on the default branch, by the week they landed'}. `
-    + `The line is ${FIX}`, fn('fix'), ` on the right axis. Click a week to list its ${noun.toLowerCase()}.`);
+    + `The line is ${FIX}`, fn('fix'), ` on the right axis. ${hover() ? 'Click' : 'Tap twice on'} a week to list its ${noun.toLowerCase()}.`);
 
   // ---- one chart: stacked weekly bars by group, the rolling fix share drawn over them on a 0–100% axis ----
   // The second y-axis is the owner's call against the dataviz one-axis rule: a separate fix-share chart above the
@@ -215,15 +237,20 @@ async function projectPage() {
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { top: 70 } },
       interaction: { mode: 'index', intersect: false },
+      events: ['mousemove', 'mouseout', 'click'], // not touchstart/touchmove: a finger drag scrolls, a tap (click) shows the week and opens its list
       onClick,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          filter: (it) => it.dataset.label !== 'halo',
+        tooltip: { // the week and its total in the title, the buckets that landed, the line last, the hint muted
+          filter: (it) => it.dataset.label !== 'halo' && (it.dataset.type === 'line' || it.parsed.y > 0 || shown(rows[it.dataIndex]) === 0), // zero buckets drop out, unless the week is empty: the title needs an item
+          itemSort: (a, b) => (a.dataset.type === 'line') - (b.dataset.type === 'line'),
+          backgroundColor: 'rgba(13,15,18,.96)', borderColor: '#2b3038', borderWidth: 1, cornerRadius: 8, padding: 10, caretSize: 6,
+          titleFont: { weight: '600' }, titleMarginBottom: 8, bodySpacing: 4, boxWidth: 8, boxHeight: 8, boxPadding: 4,
+          footerFont: { weight: 'normal' }, footerColor: '#8b919a', footerMarginTop: 8,
           callbacks: {
-            title: weekTitle,
-            label: (it) => `${it.dataset.label}: ${it.dataset.label === FIX ? pct(it.parsed.y) : it.parsed.y}`,
-            footer: (items) => `Total: ${shown(rows[items[0].dataIndex])}`,
+            title: (items) => weekTitle(items[0].dataIndex),
+            label: (it) => `${it.dataset.label}  ${it.dataset.label === FIX ? pct(it.parsed.y) : it.parsed.y}`,
+            footer: () => [hover() ? 'Click to list' : 'Tap again to list'],
           },
         },
       },
@@ -256,36 +283,47 @@ async function projectPage() {
     const events = (await Promise.all(months.map((m) => get(`${D}${id}/months/${m}.json`)))).flat()
       .filter((e) => e.ts.slice(0, 10) >= d && e.ts.slice(0, 10) <= to && groupOf(e.category)); // the list matches the bar
     const what = noun.toLowerCase();
-    $('drill-title').textContent = `${view === 'week' ? `Week of ${fmt(d, true)}` : fmt(d, true)} · ${events.length} ${what}`;
-    const body = $('drill-table').tBodies[0];
-    body.replaceChildren();
-    let lastDay;
+    $('drill-title').textContent = `${view === 'week' ? weekSpan(d, true) : fmt(d, true)} · ${events.length} ${what}`;
+    // One line per item under group headers: changelog items by version (the version is the reference, named once
+    // in its header); commits by day in the week view, each with its sha. The day view of commits needs no header.
+    const keyOf = changelog ? (e) => e.version : view === 'week' ? (e) => e.ts.slice(0, 10) : () => '';
+    const groups = [];
     for (const e of events) {
-      const day = e.ts.slice(0, 10);
-      if (view === 'week' && day !== lastDay) {
-        body.append(el('tr', { className: 'day' }, el('th', { colSpan: 4, textContent: `${fmt(day, true)} · ${events.filter((x) => x.ts.startsWith(day)).length} ${what}` })));
-        lastDay = day;
-      }
-      const ref = e.version ?? e.sha.slice(0, 7);
-      const group = groupOf(e.category); // never null: the filter above kept only grouped events
-      body.append(el('tr', { className: 'ev' },
-        el('td', { dataset: { label: refLabel } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
-        el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${group.color}`, textContent: e.category })), // stored label, bucket colour
-        el('td', { dataset: { label: 'Source' }, textContent: e.source }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
-        el('td', { dataset: { label: 'Change' }, textContent: e.text })));
+      if (!groups.length || keyOf(e) !== groups.at(-1).key) groups.push({ key: keyOf(e), items: [] });
+      groups.at(-1).items.push(e);
     }
+    const ext = (href, text, className) => el('a', { className, href, target: '_blank', rel: 'noopener', textContent: text });
+    const list = $('drill-list');
+    list.replaceChildren(...groups.flatMap(({ key, items }) => {
+      const [e] = items;
+      const n = `${items.length} ${what}`;
+      const head = changelog ? el('h3', {}, e.url ? ext(e.url, e.version) : e.version, ` · ${fmt(e.ts.slice(0, 10), true)} · ${n}`)
+        : key ? el('h3', { textContent: `${fmt(key, true)} · ${n}` }) : null;
+      const ul = el('ul', {}, ...items.map((e) => {
+        const group = groupOf(e.category); // never null: the filter above kept only grouped events
+        return el('li', { className: 'ev' },
+          el('span', { className: 'tag', style: `background:${group.color}`, textContent: e.category }), // stored label, bucket colour
+          el('span', { className: 'text', textContent: e.text }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
+          ...(changelog ? [] : [e.url ? ext(e.url, e.sha.slice(0, 7), 'ref') : el('span', { className: 'ref', textContent: e.sha.slice(0, 7) })]));
+      }));
+      return head ? [head, ul] : [ul];
+    }));
+    list.scrollTop = 0;
     $('drill-empty').textContent = `No counted ${what}.`;
     $('drill-empty').hidden = events.length > 0;
-    $('drill-table').hidden = events.length === 0;
+    list.hidden = events.length === 0;
     $('drill').hidden = false;
     if (view === 'day') history.replaceState(null, '', `#${d}`);
     $('drill').scrollIntoView({ block: 'nearest' });
   }
-  $('drill-close').onclick = () => { $('drill').hidden = true; history.replaceState(null, '', location.pathname); };
+  $('drill-close').onclick = () => { $('drill').hidden = true; selected = -1; chart.update(); history.replaceState(null, '', location.pathname); };
 
   const fromHash = () => {
     const m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
-    if (m) return openDrill(m[1], 'day');
+    if (!m) return;
+    selected = rows.findIndex((r) => r.d === mondayOf(m[1]));
+    chart.update();
+    return openDrill(m[1], 'day');
   };
   await fromHash();
   addEventListener('hashchange', fromHash);
