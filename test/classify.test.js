@@ -30,13 +30,6 @@ test('residual -> null', () => {
   assert.equal(classifyByRule(ev('constructor thing'), {}), null);
 });
 
-test('per-project synonyms extend the map', () => {
-  const project = { rules: { synonyms: { bugfixes: 'fixed' } } };
-  assert.equal(classifyByRule(ev('Bugfixes, UI polish'), project), 'fixed');
-  assert.equal(classifyByRule(ev('Bugfixes, UI polish'), {}), null);
-  assert.equal(classifyByRule(ev('Fixed x'), project), 'fixed');
-});
-
 test('a leading "Scope:" lead-in is skipped to find the first word', () => {
   // Real bullets from CHANGELOG.md.
   const md = [
@@ -70,14 +63,13 @@ test('a conventional prefix beats the first-word rule', () => {
   assert.equal(cm('feat: remove x'), 'added');
 });
 
-test('commit first-word fallback, incl. Scope: lead-in and project synonyms', () => {
+test('commit first-word fallback, incl. Scope: lead-in', () => {
   assert.equal(cm('Fix crash in parser (#1)'), 'fixed');
   assert.equal(cm('Add --flag'), 'added');
   assert.equal(cm('Remove dead code'), 'removed');
   assert.equal(cm('Windows: Fixed a thing'), 'fixed');
   assert.equal(cm('Bump WebKit'), null);
   assert.equal(cm('bundler: do x'), null);
-  assert.equal(cm('Bump WebKit', { rules: { synonyms: { bump: 'chore' } } }), 'chore');
 });
 
 test('commit rule categories stay inside CATEGORIES.commits', () => {

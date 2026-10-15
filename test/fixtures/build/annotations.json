@@ -13,13 +13,5 @@
     "vendor": "anthropic",
     "kind": "model",
     "source": "https://example.test/c"
-  },
-  {
-    "date": "2026-09-01",
-    "end": "2026-09-07",
-    "label": "Quiet week",
-    "vendor": "openai",
-    "kind": "period",
-    "source": "https://example.test/b"
   }
 ]

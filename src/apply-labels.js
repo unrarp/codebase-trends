@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES } from './classify.js';
+import { CATEGORIES, classifyByRule } from './classify.js';
 import { appendJsonl, readJsonl } from './store.js';
 
 /**
@@ -13,9 +13,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MODEL = 'claude-sonnet-5-5';
 export const BATCH_SIZE = 50;
 
+/** Pending: one { textHash, text } per distinct textHash with no rule category and no classification; derived, never stored. */
+export function pendingOf(project, { dataRoot = join(ROOT, 'data') } = {}) {
+  const dir = join(dataRoot, project.id);
+  const classified = new Set(readJsonl(join(dir, 'classifications.jsonl')).map((c) => c.textHash));
+  const pending = new Map();
+  for (const e of readJsonl(join(dir, 'events.jsonl'))) {
+    if (classifyByRule(e, project) === null && !classified.has(e.textHash) && !pending.has(e.textHash)) pending.set(e.textHash, { textHash: e.textHash, text: e.text });
+  }
+  return [...pending.values()];
+}
+
 /** Writes `<project>-<n>.txt` batch files (≤ BATCH_SIZE pending entries each, n from 1) into dir; returns their paths. */
 export function writeBatches(project, dir, { dataRoot = join(ROOT, 'data') } = {}) {
-  const pending = readJsonl(join(dataRoot, project.id, 'pending.jsonl'));
+  const pending = pendingOf(project, { dataRoot });
   const header = `# project: ${project.id} basis: ${project.basis} categories: ${CATEGORIES[project.basis].join(' ')}\n`;
   mkdirSync(dir, { recursive: true });
   const paths = [];
@@ -41,13 +52,10 @@ export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = J
     const project = m && projects.find((p) => p.id === m[1]);
     if (!project) throw new Error(`${file}: not named <project>-<n>.txt for a known project`);
     if (!state.has(project.id)) {
-      state.set(project.id, {
-        pending: new Set(readJsonl(join(dataRoot, project.id, 'pending.jsonl')).map((p) => p.textHash)),
-        labelled: new Set(readJsonl(join(dataRoot, project.id, 'classifications.jsonl')).map((c) => c.textHash)),
-      });
+      state.set(project.id, new Set(pendingOf(project, { dataRoot }).map((p) => p.textHash)));
       byProject.set(project.id, new Map());
     }
-    const { pending } = state.get(project.id);
+    const pending = state.get(project.id);
     const found = byProject.get(project.id);
     readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
       if (!line.trim()) return;
@@ -55,7 +63,7 @@ export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = J
       const lm = /^([0-9a-f]{16}): (\S+)$/.exec(line.trim());
       if (!lm) fail('malformed line');
       const [, hash, category] = lm;
-      if (!pending.has(hash)) fail('hash not in pending.jsonl');
+      if (!pending.has(hash)) fail('hash not pending');
       if (!CATEGORIES[project.basis].includes(category)) fail(`category not in ${project.basis} set`);
       if (!found.has(hash)) found.set(hash, category);
     });
@@ -63,8 +71,7 @@ export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = J
   const ts = now();
   const counts = {};
   for (const [id, found] of byProject) {
-    const { labelled } = state.get(id);
-    const rows = [...found].filter(([hash]) => !labelled.has(hash)).map(([textHash, category]) => ({ textHash, category, model: MODEL, ts }));
+    const rows = [...found].map(([textHash, category]) => ({ textHash, category, model: MODEL, ts }));
     appendJsonl(join(dataRoot, id, 'classifications.jsonl'), rows);
     counts[id] = rows.length;
   }

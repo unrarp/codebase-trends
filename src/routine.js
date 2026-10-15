@@ -3,22 +3,17 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { collect } from './collect.js';
+import { build } from './build.js';
 import { applyLabels, writeBatches } from './apply-labels.js';
 import { retry } from './net.js';
-import { readJsonl } from './store.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RETRY = { attempts: 3, delays: [2000, 5000] };
 
-/** Projects whose pending.jsonl has at least one entry. */
-export function projectsWithPending(projects, { dataRoot = join(ROOT, 'data') } = {}) {
-  return projects.filter((p) => readJsonl(join(dataRoot, p.id, 'pending.jsonl')).length > 0);
-}
-
-/** Empties batchesDir, then writes batch files for every project with pending; returns the paths. */
+/** Empties batchesDir, then writes batch files for every project's pending (none for a project with none); returns the paths. */
 export function prepareBatches(projects, batchesDir, { dataRoot = join(ROOT, 'data') } = {}) {
   rmSync(batchesDir, { recursive: true, force: true });
-  return projectsWithPending(projects, { dataRoot }).flatMap((p) => writeBatches(p, batchesDir, { dataRoot }));
+  return projects.flatMap((p) => writeBatches(p, batchesDir, { dataRoot }));
 }
 
 /** Added-line counts per project from `git diff --numstat` text: { events, labels, projects }. */
@@ -40,6 +35,21 @@ export function commitMessage({ events, labels, projects }) {
 }
 
 const run = (cmd, args, cwd = ROOT) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+
+/**
+ * Builds docs/ stamped with the generatedAt already published; when that leaves data/ and docs/ identical to the
+ * committed tree there is nothing to publish and the result is false. Otherwise rebuilds stamped `now` and returns true,
+ * so generatedAt is the last time the published data changed (the site's hatch starts there).
+ */
+export function buildIfChanged({ root = ROOT, now = new Date() } = {}) {
+  const [first] = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
+  const summary = first && join(root, 'docs', 'data', first.id, 'summary.json');
+  const prev = summary && existsSync(summary) ? JSON.parse(readFileSync(summary, 'utf8')).generatedAt : null;
+  build({ root, now: prev ? new Date(prev) : now });
+  if (!run('git', ['status', '--porcelain', '--', 'data', 'docs'], root).trim()) return false;
+  build({ root, now });
+  return true;
+}
 
 /** Stages data/ and docs/ (whichever exist) in the repo at cwd; returns the counts of what is staged. */
 export function stageAndCount(cwd = ROOT) {
@@ -73,16 +83,19 @@ async function main(argv) {
     }
   }
 
-  for (const script of ['build', 'check:core']) {
-    try {
-      run('npm', ['run', script]);
-    } catch (e) {
-      throw new Error(`${script} failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
-    }
+  if (!buildIfChanged()) {
+    console.log('RESULT unchanged');
+    await ping();
+    return 0;
+  }
+  try {
+    run('npm', ['run', 'check:core']);
+  } catch (e) {
+    throw new Error(`check:core failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
   }
 
   const counts = stageAndCount();
-  run('git', ['commit', '--allow-empty', '-m', commitMessage(counts)]);
+  run('git', ['commit', '-m', commitMessage(counts)]);
   // Routine sessions run on a claude/… branch with no local master, so name the source.
   // The stray-branch push the session's stop hook asks for is declined in ROUTINE.md, not here.
   run('git', ['push', '-u', 'origin', 'HEAD:master']);

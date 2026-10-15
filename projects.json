@@ -7,6 +7,6 @@
   { "id": "codex", "name": "Codex", "basis": "commits",
     "sources": { "git": { "repo": "https://github.com/openai/codex", "branch": "main", "since": "2025-01-01" } },
     "bots": [],
-    "links": { "commit": "https://github.com/openai/codex/commit/{sha}", "pr": "https://github.com/openai/codex/pull/{n}" },
+    "links": { "commit": "https://github.com/openai/codex/commit/{sha}" },
     "annotations": ["openai"] }
 ]

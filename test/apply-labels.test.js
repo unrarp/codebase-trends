@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyLabels, writeBatches, MODEL } from '../src/apply-labels.js';
+import { applyLabels, pendingOf, writeBatches, MODEL } from '../src/apply-labels.js';
 import { CATEGORIES } from '../src/classify.js';
 
 const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }];
@@ -14,7 +14,7 @@ function setup(pendingByProject = { p: [1, 2, 3], q: [4] }) {
   const dataRoot = join(root, 'data');
   for (const [id, hs] of Object.entries(pendingByProject)) {
     mkdirSync(join(dataRoot, id), { recursive: true });
-    writeFileSync(join(dataRoot, id, 'pending.jsonl'), hs.map((h) => JSON.stringify({ textHash: H(h), text: `t${h}` }) + '\n').join(''));
+    writeFileSync(join(dataRoot, id, 'events.jsonl'), hs.map((h) => JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` }) + '\n').join('')); // 't1' has no rule
   }
   const answer = (name, text) => { const f = join(root, name); writeFileSync(f, text); return f; };
   const labels = (id) => join(dataRoot, id, 'classifications.jsonl');
@@ -34,7 +34,7 @@ test('appends labels stamped with model and ts', () => {
 });
 
 for (const [name, line, reason] of [
-  ['an unknown hash', `${H(9)}: fixed`, /hash not in pending/],
+  ['an unknown hash', `${H(9)}: fixed`, /hash not pending/],
   ['an out-of-set category', `${H(1)}: revert`, /category not in changelog set/],
   ['a malformed line', `${H(1)} fixed`, /malformed line/],
 ]) {
@@ -54,10 +54,11 @@ for (const [name, line, reason] of [
   });
 }
 
-test('skips already-labelled hashes and counts duplicate answers once', () => {
+test('an already-labelled hash is no longer pending, so an answer for it is rejected; duplicate answers count once', () => {
   const t = setup();
   writeFileSync(t.labels('p'), JSON.stringify({ textHash: H(1), category: 'added', model: 'x', ts: 'old' }) + '\n');
-  const counts = t.apply([t.answer('p-1.txt', `${H(1)}: fixed\n${H(2)}: fixed\n`), t.answer('p-2.txt', `${H(2)}: changed\n`)]);
+  assert.throws(() => t.apply([t.answer('p-1.txt', `${H(1)}: fixed\n`)]), /hash not pending/);
+  const counts = t.apply([t.answer('p-1.txt', `${H(2)}: fixed\n`), t.answer('p-2.txt', `${H(2)}: changed\n`)]);
   assert.deepEqual(counts, { p: 1 });
   const rows = readFileSync(t.labels('p'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(rows.map((r) => [r.textHash, r.category]), [[H(1), 'added'], [H(2), 'fixed']]);
@@ -82,4 +83,22 @@ test('writeBatches: ≤50 per file, header, every pending hash exactly once', ()
     for (const l of lines) seen.push(l.split('\t')[0]);
   }
   assert.deepEqual(seen.sort(), hs.map(H));
+});
+
+test('pendingOf = rule-null events without a classification, one per textHash, through the changelog parser', async () => {
+  const { collect } = await import('../src/collect.js');
+  const fx = (n) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
+  const project = JSON.parse(fx('../../projects.json'))[0];
+  const dataRoot = join(mkdtempSync(join(tmpdir(), 'pending-')), 'data');
+  const net = { fetchText: async () => fx('changelog-slice.md') + fx('changelog-extra.md'), fetchJson: async () => JSON.parse(fx('npm-time.json')) };
+  await collect([project], { dataRoot, seedDir: new URL('../seed/', import.meta.url).pathname, net });
+  // 2.1.19#13 and the "Internal infrastructure" bullet (under two versions) have no rule category.
+  const p = pendingOf(project, { dataRoot });
+  assert.deepEqual(p.map((x) => x.text).sort(), [
+    'Enabled session forking and rewind functionality for all users',
+    'Internal infrastructure improvements (no user-facing changes)',
+  ]);
+  const hash = p.find((x) => x.text.startsWith('Enabled')).textHash;
+  writeFileSync(join(dataRoot, 'claude-code', 'classifications.jsonl'), JSON.stringify({ textHash: hash, category: 'added', model: 'm', ts: '2026-10-14T00:00:00Z' }) + '\n');
+  assert.deepEqual(pendingOf(project, { dataRoot }).map((x) => x.text), ['Internal infrastructure improvements (no user-facing changes)']);
 });

@@ -112,10 +112,9 @@ async function projectPage() {
   $('fn-lines').hidden = changelog; // changelog items have no size
   $('fn-lines').textContent = `${SIZE}: lines added + deleted by a commit, against its first parent; the median over the window's counted commits, so one sweeping commit does not move it. Commits with no recorded size are left out.`;
 
-  // ---- shared chart furniture: context periods, not-yet-collected hatch, model markers ----
-  const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.end ?? a.date) + DAY > anchor;
+  // ---- shared chart furniture: not-yet-collected hatch, model markers ----
+  const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.date) + DAY > anchor;
   const major = annotations.filter((a) => a.kind === 'model' && a.major && inRange(a)).sort((a, b) => (a.date + a.label < b.date + b.label ? -1 : 1));
-  const periods = annotations.filter((a) => a.kind === 'period' && inRange(a));
   const pattern = (() => {
     const c = el('canvas', { width: 8, height: 8 });
     const g = c.getContext('2d');
@@ -133,12 +132,6 @@ async function projectPage() {
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea: a } = chart;
       ctx.save();
-      ctx.fillStyle = 'rgba(138,143,152,.28)';
-      for (const p of periods) {
-        const x0 = Math.max(a.left, toX(chart, Date.parse(p.date)));
-        const x1 = Math.min(a.right, toX(chart, Date.parse(p.end ?? p.date) + DAY));
-        if (x1 > x0) ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
-      }
       const x0 = Math.max(a.left, toX(chart, generatedAt));
       const x1 = Math.min(a.right, toX(chart, now));
       chart.$hatch = { x0, x1, width: Math.max(0, x1 - x0) };
@@ -240,7 +233,6 @@ async function projectPage() {
     },
     plugins: [furniture],
   });
-  chart.$periods = periods;
   window.__chart = chart; // test hook read by test/browser.spec.js
 
   const item = (cls, text, props = {}) => el('span', props, el('span', { className: `sw ${cls}` }), text);
@@ -248,15 +240,13 @@ async function projectPage() {
     ...groups.map((g) => el('span', {}, el('span', { className: 'sw', style: `background:${g.color}` }), cap(g.key))),
     el('span', {}, el('span', { className: 'sw line' }), el('span', {}, FIX, fn('fix'), ' (right axis)')),
     ...(major.length ? [el('span', {}, el('span', { className: 'sw marker' }), el('span', {}, 'Major model release', fn('markers')))] : []),
-    ...(periods.length ? [item('period', 'Context period (approx.)')] : []),
     item('hatch', 'Not yet collected', { id: 'legend-hatch', hidden: true }));
   $('fn-markers').hidden = !major.length; // the note explains markers that are on the chart
   chart.update(); // the hatch legend entry is decided inside the draw, which ran before the entry existed
-  const link = (a, ...kids) => el('a', { className: 'chip', href: a.source, target: '_blank', rel: 'noopener', title: `${a.label} · ${fmt(a.date, true)}${a.end ? `–${fmt(a.end, true)}` : ''} · ${a.source}`, style: 'text-decoration:none;color:inherit' }, ...kids);
+  const link = (a, ...kids) => el('a', { className: 'chip', href: a.source, target: '_blank', rel: 'noopener', title: `${a.label} · ${fmt(a.date, true)} · ${a.source}`, style: 'text-decoration:none;color:inherit' }, ...kids);
   // Dates are hidden on narrow screens (the marker on the chart gives them) and always in the chip's title.
   $('chips').replaceChildren(
-    ...major.map((m, i) => link(m, el('span', { className: 'dot' }), el('span', { className: 'n', textContent: String(i + 1) }), m.label, el('span', { className: 'date', textContent: ` · ${fmt(m.date)}` }))),
-    ...periods.map((p) => link(p, el('span', { className: 'sq' }), p.label, el('span', { className: 'date', textContent: ` · ${fmt(p.date)}–${fmt(p.end ?? p.date)}` }))));
+    ...major.map((m, i) => link(m, el('span', { className: 'dot' }), el('span', { className: 'n', textContent: String(i + 1) }), m.label, el('span', { className: 'date', textContent: ` · ${fmt(m.date)}` }))));
 
   // ---- drill-down ----
   async function openDrill(d, view) {

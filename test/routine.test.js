@@ -1,28 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { projectsWithPending, prepareBatches, countsFromNumstat, commitMessage, stageAndCount } from '../src/routine.js';
+import { prepareBatches, countsFromNumstat, commitMessage, stageAndCount, buildIfChanged } from '../src/routine.js';
+import { build } from '../src/build.js';
 
 const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }, { id: 'r', basis: 'changelog' }];
 const H = (n) => String(n).padStart(16, '0');
-const pendingLines = (hs) => hs.map((h) => JSON.stringify({ textHash: H(h), text: `t${h}` }) + '\n').join('');
+const eventLines = (hs) => hs.map((h) => JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` }) + '\n').join(''); // 't1' has no rule
 
 function dataTree(pendingByProject) {
   const root = mkdtempSync(join(tmpdir(), 'routine-'));
   const dataRoot = join(root, 'data');
   for (const [id, hs] of Object.entries(pendingByProject)) {
     mkdirSync(join(dataRoot, id), { recursive: true });
-    writeFileSync(join(dataRoot, id, 'pending.jsonl'), pendingLines(hs));
+    writeFileSync(join(dataRoot, id, 'events.jsonl'), eventLines(hs));
   }
   return { root, dataRoot };
 }
 
-test('only projects with pending are detected and get batch files', () => {
+test('only projects with pending get batch files', () => {
   const { root, dataRoot } = dataTree({ p: [1, 2], q: [], /* r: no file */ });
-  assert.deepEqual(projectsWithPending(projects, { dataRoot }).map((p) => p.id), ['p']);
   const dir = join(root, 'batches');
   mkdirSync(dir);
   writeFileSync(join(dir, 'stale-1.txt'), 'old');
@@ -78,4 +78,21 @@ test('change detection on a temp git repo', () => {
   const c = stageAndCount(root);
   assert.deepEqual(c, { events: 4, labels: 1, projects: ['p', 'q'] });
   assert.equal(commitMessage(c), 'data: p, q +4 events, +1 labels');
+});
+
+test('buildIfChanged: an unchanged build keeps the committed generatedAt and reports false; new data rebuilds stamped now', () => {
+  const root = mkdtempSync(join(tmpdir(), 'routine-build-'));
+  cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
+  const generatedAt = () => JSON.parse(readFileSync(join(root, 'docs', 'data', 'claude-code', 'summary.json'), 'utf8')).generatedAt;
+  const T0 = '2026-10-14T12:00:00.000Z';
+  const T1 = '2026-10-14T13:00:00.000Z';
+  build({ root, now: new Date(T0) });
+  git('init', '-q'); git('add', '.'); git('commit', '-q', '-m', 'init');
+  assert.equal(buildIfChanged({ root, now: new Date(T1) }), false);
+  assert.equal(generatedAt(), T0); // the site still says T0: nothing new to publish
+  assert.equal(git('status', '--porcelain', '--', 'data', 'docs').trim(), '');
+  appendFileSync(join(root, 'data', 'sparse', 'events.jsonl'), JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] }) + '\n');
+  assert.equal(buildIfChanged({ root, now: new Date(T1) }), true);
+  assert.equal(generatedAt(), T1);
 });

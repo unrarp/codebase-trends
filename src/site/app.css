@@ -30,7 +30,6 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
 .sw.line { width: 14px; height: 0; border-top: 2px solid var(--accent); border-radius: 0; }
 .sw.marker { width: 0; height: 12px; border-left: 2px dashed var(--marker); border-radius: 0; }
-.sw.period { background: rgba(138, 143, 152, .5); width: 14px; height: 12px; }
 .sw.hatch { width: 14px; height: 12px; background: repeating-linear-gradient(135deg, #6b727c 0 1px, transparent 1px 4px); border: 1px solid #3a3f47; }
 .chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .chart-wrap { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); margin-top: 4px; }
@@ -41,7 +40,6 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-size: 12px; max-width: 100%; }
 .chip .n { color: var(--marker); font-weight: 600; }
 .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--marker); flex: none; }
-.chip .sq { width: 8px; height: 8px; background: #8a8f98; flex: none; }
 
 .btn { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; }
 table { width: 100%; border-collapse: collapse; margin-top: 12px; }

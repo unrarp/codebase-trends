@@ -14,8 +14,8 @@
 - **Never `git add -A` or `git add .`** — add paths explicitly.
 - **Tests must be seen failing** before they count: bug fixes fail before the
   fix; other new tests are broken deliberately, watched failing, then restored.
-- **The routine commits to `master` every hour** — `git pull --rebase` before
-  pushing. Change what it does through tracked files (`ROUTINE.md`,
+- **The routine runs hourly and commits to `master` whenever data changed** —
+  `git pull --rebase` before pushing. Change what it does through tracked files (`ROUTINE.md`,
   `src/routine.js`), never the saved prompt on claude.ai.
 - **Categories are derived at build, never stored on events** — fix a
   mislabel with a rule in `src/classify.js`; `events.jsonl` holds raw facts.

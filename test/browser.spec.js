@@ -95,7 +95,7 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await open(page, 'claude-code/');
       const m = await page.evaluate(() => __chart.$markers);
       expect(m.map((k) => k.n)).toEqual([1]);
-      // only major annotations get a chip; the fixture's Model B is minor and openai's period is not in view
+      // only major annotations get a chip; the fixture's Model B is minor
       expect(await page.locator('#chips .chip').count()).toBe(1);
       expect(await page.locator('#chips .chip .date').first().isVisible()).toBe(!mobile); // dates only on wide screens
       await expect(page.locator('#legend')).toContainText('Major model release');
@@ -161,13 +161,6 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await open(page, 'claude-code/');
       expect(await page.evaluate(() => document.querySelector('.chart-wrap').style.width)).toBe('');
       expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
-    });
-
-    test('period entries draw as a context band', async ({ page }) => {
-      await open(page, 'sparse/');
-      expect(await page.evaluate(() => __chart.$periods.length)).toBe(1);
-      await expect(page.locator('#chips')).toContainText('Quiet week');
-      await expect(page.locator('#legend')).toContainText('Context period');
     });
 
     test('root opens the first project, then the last one viewed', async ({ page }) => {

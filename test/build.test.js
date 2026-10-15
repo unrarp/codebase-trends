@@ -114,7 +114,7 @@ test('pages for every project in config, public projects.json, annotations passt
   assert.deepEqual(pub.map((p) => p.id), ['claude-code', 'sparse']);
   assert.equal('sources' in pub[0], false);
   assert.deepEqual(pub[1].annotations, ['openai']);
-  assert.equal(j('data/annotations.json').length, 3);
+  assert.equal(j('data/annotations.json').length, 2);
 });
 
 test('a rebuild with the same now is byte-identical', () => {

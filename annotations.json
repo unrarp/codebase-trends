@@ -75,7 +75,8 @@
     "label": "Sonnet 4.5",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-sonnet-4-5"
+    "source": "https://www.anthropic.com/news/claude-sonnet-4-5",
+    "major": true
   },
   {
     "date": "2025-10-15",
@@ -89,8 +90,7 @@
     "label": "GPT-5.1",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/gpt-5-1/",
-    "major": true
+    "source": "https://openai.com/index/gpt-5-1/"
   },
   {
     "date": "2025-11-19",
@@ -127,7 +127,8 @@
     "label": "GPT-5.3-Codex",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-5-3-codex/"
+    "source": "https://openai.com/index/introducing-gpt-5-3-codex/",
+    "major": true
   },
   {
     "date": "2026-02-05",
@@ -173,8 +174,7 @@
     "label": "Opus 4.8",
     "vendor": "anthropic",
     "kind": "model",
-    "source": "https://www.anthropic.com/news/claude-opus-4-8",
-    "major": true
+    "source": "https://www.anthropic.com/news/claude-opus-4-8"
   },
   {
     "date": "2026-06-09",
@@ -236,8 +236,7 @@
     "label": "GPT-6 Sol",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-6-sol-and-luna/",
-    "major": true
+    "source": "https://openai.com/index/introducing-gpt-6-sol-and-luna/"
   },
   {
     "date": "2026-09-28",
@@ -251,7 +250,8 @@
     "label": "GPT-6.1 Sol",
     "vendor": "openai",
     "kind": "model",
-    "source": "https://openai.com/index/introducing-gpt-6-1-sol/"
+    "source": "https://openai.com/index/introducing-gpt-6-1-sol/",
+    "major": true
   },
   {
     "date": "2026-10-07",

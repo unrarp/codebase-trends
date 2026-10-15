@@ -18,8 +18,7 @@
       "openai"
     ],
     "links": {
-      "commit": "https://github.com/openai/codex/commit/{sha}",
-      "pr": "https://github.com/openai/codex/pull/{n}"
+      "commit": "https://github.com/openai/codex/commit/{sha}"
     }
   }
 ]

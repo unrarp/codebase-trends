@@ -35,8 +35,9 @@ so projects compare on one footing:
 Only model releases flagged `major` in `annotations.json` are drawn, as
 numbered markers; the other entries stay in the file unused. The site root opens the
 project last viewed in that browser (else the first in `projects.json`); a
-switcher on each page changes project. The span after the last sync is hatched
-"Not yet collected", so a stalled routine shows as a growing hatch.
+switcher on each page changes project. The span since the published data last
+changed is hatched "Not yet collected"; routine health itself is
+healthchecks.io's job (see Routine).
 
 Two bases, set per project in `projects.json`:
 
@@ -54,8 +55,8 @@ Two bases, set per project in `projects.json`:
 ```
 projects.json ─► src/collect.js ─► data/<project>/events.jsonl  (append-only raw facts; backfill-stats.js is the one rewrite, adding a field)
                                    data/<project>/dates.json    (changelog basis)
-                                   data/<project>/pending.jsonl (gitignored)
-pending ─► model (routine agent or scripts/classify-local.sh)
+pending (events with no rule category and no label; derived by src/apply-labels.js, never stored)
+        ─► model (routine agent or scripts/classify-local.sh)
         ─► src/apply-labels.js ─► data/<project>/classifications.jsonl
 events + rules (src/classify.js) + classifications + annotations.json
         ─► src/build.js ─► docs/data/** + docs/<project>/index.html
@@ -68,9 +69,10 @@ them by hand.
 ## Routine
 
 An hourly Claude Code routine runs `node src/routine.js`, which collects every
-project, builds the site, runs `npm run check:core`, commits `data/` and
-`docs/` and pushes to `master`, then pings healthchecks.io. Every successful
-run commits.
+project and builds the site. If that changes nothing under `data/` or `docs/`
+it stops there; otherwise it runs `npm run check:core`, commits `data/` and
+`docs/` and pushes to `master`. Either way a successful run pings
+healthchecks.io.
 
 - **Classify hand-off:** if new events have no rule category, the script writes
   batches to `.routine/batches/` and exits 3. The agent labels them using
@@ -136,10 +138,12 @@ announcement URL.
 
 ## Design notes
 
-- **Every successful run commits.** The build always rewrites
-  `summary.json`'s `generatedAt`, so `generatedAt` is the last successful sync
-  and the site's hatched region measures staleness with no other state. A
-  rule, template or annotation change also takes effect on the next run.
+- **A run commits only what changed.** The routine first builds with the
+  `generatedAt` already published; if `data/` and `docs/` come out identical
+  to the committed tree, nothing is committed. Otherwise it rebuilds stamped
+  now, so `generatedAt` is the last time the published data changed and the
+  site's hatch starts there with no other state. A rule, template or
+  annotation change counts as a change and takes effect on the next run.
 - **Rules are applied at build time, never stored on events.** `events.jsonl`
   holds raw facts only; categories are derived on every build (rule first,
   then the cached model label by `textHash`, else `other`/pending). Changing a

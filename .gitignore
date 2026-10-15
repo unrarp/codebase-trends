@@ -1,5 +1,4 @@
 node_modules/
 .claude/
 .routine/
-data/*/pending.jsonl
 test-results/
