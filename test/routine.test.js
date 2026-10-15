@@ -1,18 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { prepareBatches, countsFromNumstat, commitMessage, stageAndCount, buildIfChanged } from '../src/routine.js';
 import { build } from '../src/build.js';
+import { tmp } from './tmp.js';
 
 const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }, { id: 'r', basis: 'changelog' }];
 const H = (n) => String(n).padStart(16, '0');
 const eventLines = (hs) => hs.map((h) => JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` }) + '\n').join(''); // 't1' has no rule
 
 function dataTree(pendingByProject) {
-  const root = mkdtempSync(join(tmpdir(), 'routine-'));
+  const root = tmp('routine-');
   const dataRoot = join(root, 'data');
   for (const [id, hs] of Object.entries(pendingByProject)) {
     mkdirSync(join(dataRoot, id), { recursive: true });
@@ -62,7 +62,7 @@ test('counts and message derive from numstat text', () => {
 });
 
 test('change detection on a temp git repo', () => {
-  const root = mkdtempSync(join(tmpdir(), 'routine-git-'));
+  const root = tmp('routine-git-');
   const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
   mkdirSync(join(root, 'data', 'p'), { recursive: true });
   writeFileSync(join(root, 'data', 'p', 'events.jsonl'), '{"a":1}\n{"a":2}\n');
@@ -81,7 +81,7 @@ test('change detection on a temp git repo', () => {
 });
 
 test('buildIfChanged: an unchanged build keeps the committed generatedAt and reports false; new data rebuilds stamped now', () => {
-  const root = mkdtempSync(join(tmpdir(), 'routine-build-'));
+  const root = tmp('routine-build-');
   cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
   const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
   const generatedAt = () => JSON.parse(readFileSync(join(root, 'docs', 'data', 'claude-code', 'summary.json'), 'utf8')).generatedAt;

@@ -1,16 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { applyLabels, pendingOf, writeBatches, MODEL } from '../src/apply-labels.js';
 import { CATEGORIES } from '../src/classify.js';
+import { tmp } from './tmp.js';
 
 const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }];
 const H = (n) => String(n).padStart(16, '0');
 
 function setup(pendingByProject = { p: [1, 2, 3], q: [4] }) {
-  const root = mkdtempSync(join(tmpdir(), 'labels-'));
+  const root = tmp('labels-');
   const dataRoot = join(root, 'data');
   for (const [id, hs] of Object.entries(pendingByProject)) {
     mkdirSync(join(dataRoot, id), { recursive: true });
@@ -89,7 +89,7 @@ test('pendingOf = rule-null events without a classification, one per textHash, t
   const { collect } = await import('../src/collect.js');
   const fx = (n) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
   const project = JSON.parse(fx('../../projects.json'))[0];
-  const dataRoot = join(mkdtempSync(join(tmpdir(), 'pending-')), 'data');
+  const dataRoot = join(tmp('pending-'), 'data');
   const net = { fetchText: async () => fx('changelog-slice.md') + fx('changelog-extra.md'), fetchJson: async () => JSON.parse(fx('npm-time.json')) };
   await collect([project], { dataRoot, seedDir: new URL('../seed/', import.meta.url).pathname, net });
   // 2.1.19#13 and the "Internal infrastructure" bullet (under two versions) have no rule category.

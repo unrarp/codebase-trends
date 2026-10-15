@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, existsSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,12 +11,13 @@ const NOW = Date.parse('2026-10-14T12:00:00.000Z'); // fixture generatedAt
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const PREFIX = '/codebase-trends/';
 
-const out = mkdtempSync(join(tmpdir(), 'ct-browser-'));
-build({ root: ROOT, out, now: new Date(NOW) });
-
+// Built in beforeAll, not at load: Playwright also loads this file in its main process, which runs no hooks.
+let out;
 let server;
 let base;
 test.beforeAll(async () => {
+  out = mkdtempSync(join(tmpdir(), 'ct-browser-'));
+  build({ root: ROOT, out, now: new Date(NOW) });
   server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x').pathname;
     let file = url.startsWith(PREFIX) ? join(out, normalize(url.slice(PREFIX.length))) : null;
@@ -27,7 +28,10 @@ test.beforeAll(async () => {
   await new Promise((r) => server.listen(0, r));
   base = `http://localhost:${server.address().port}${PREFIX}`;
 });
-test.afterAll(() => server.close());
+test.afterAll(() => { // also after a failed beforeAll, which may leave server unset
+  server?.close();
+  if (out) rmSync(out, { recursive: true, force: true });
+});
 
 async function open(page, path, at = NOW) {
   const errors = [];

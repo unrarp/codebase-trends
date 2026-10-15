@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseGitLog, parseNumstat, openRepo, shallowSince, collectGitLog } from '../src/adapters/git-log.js';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { textHash } from '../src/hash.js';
+import { tmp } from './tmp.js';
 
 // Real `git log --first-parent --format=GIT_LOG_FORMAT` output from oven-sh/bun (6 commits).
 const raw = readFileSync(new URL('./fixtures/git-log-bun.txt', import.meta.url), 'utf8');
@@ -108,7 +108,7 @@ test('parseNumstat: add, del and file count per sha; a binary file counts as a f
 });
 
 test('openRepo.numstat runs against a real repo, including a merge measured against its first parent', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'ct-numstat-'));
+  const dir = tmp('ct-numstat-');
   const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' } }).trim();
   git('init', '-q', '-b', 'main');
   writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
@@ -147,7 +147,7 @@ test('collect asks the repo for the stats of new shas only and stores them on th
 });
 
 test('a commit at the shallow boundary gets no stats: with its parent cut off it would be sized against an empty tree', () => {
-  const src = mkdtempSync(join(tmpdir(), 'ct-shallow-src-'));
+  const src = tmp('ct-shallow-src-');
   const env = { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' };
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env }).trim();
   git(src, 'init', '-q', '-b', 'main');
@@ -159,7 +159,7 @@ test('a commit at the shallow boundary gets no stats: with its parent cut off it
   writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(502));
   execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'another line'], { env: { ...env, GIT_COMMITTER_DATE: '2026-06-02T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-02T00:00:00Z' } });
   const [newer, boundary] = git(src, 'log', '--format=%H', '-2').split('\n');
-  const clone = mkdtempSync(join(tmpdir(), 'ct-shallow-clone-'));
+  const clone = tmp('ct-shallow-clone-');
   execFileSync('git', ['clone', '-q', '--no-checkout', '--shallow-since=2026-05-01', `file://${src}`, clone], { env }); // a plain path would not be shallow
   const stats = openRepo(clone).numstat([newer, boundary]);
   assert.deepEqual(stats.get(newer), { add: 1, del: 0, files: 1 });

@@ -1,19 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, cpSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync, cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from '../src/build.js';
 import { validate } from '../src/validate.js';
+import { tmp } from './tmp.js';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
-const good = mkdtempSync(join(tmpdir(), 'ct-val-'));
+const good = tmp('ct-val-');
 build({ root: ROOT, out: good, now: new Date('2026-10-14T12:00:00Z') });
 
 /** Copies the good build, applies `change(dir)` to the copy, returns the violations. */
 function violationsIn(change) {
-  const out = mkdtempSync(join(tmpdir(), 'ct-bad-'));
+  const out = tmp('ct-bad-');
   cpSync(good, out, { recursive: true });
   change(out);
   return validate(out);

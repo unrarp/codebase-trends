@@ -1,17 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { build, eachDay, mondayOf } from '../src/build.js';
+import { tmp } from './tmp.js';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
 const NOW = '2026-10-14T12:00:00.000Z'; // a Wednesday
 
 const buildFixture = () => {
-  const out = mkdtempSync(join(tmpdir(), 'ct-build-'));
+  const out = tmp('ct-build-');
   build({ root: ROOT, out, now: new Date(NOW) });
   return out;
 };

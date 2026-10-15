@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collect } from '../src/collect.js';
 import { fileURLToPath } from 'node:url';
+import { tmp } from './tmp.js';
 
 const fx = (n) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
 const SEED = fileURLToPath(new URL('../seed/', import.meta.url));
@@ -19,11 +19,10 @@ const run = async (md, dataRoot) => {
   const f = (n) => { try { return readFileSync(join(dataRoot, 'claude-code', n), 'utf8'); } catch { return ''; } };
   return { events: f('events.jsonl'), dates: JSON.parse(f('dates.json')) };
 };
-const tmp = () => mkdtempSync(join(tmpdir(), 'ct-'));
 const lines = (s) => s.split('\n').filter(Boolean);
 
 test('dates = npm ∪ seed, without created/modified', async () => {
-  const { dates } = await run(slice + extra, tmp());
+  const { dates } = await run(slice + extra, tmp('ct-'));
   assert.equal(dates['2.1.299'], packument.time['2.1.299']); // npm
   assert.equal(dates['2.1.43'], '2026-02-16T21:34:15.000Z'); // seed only: not on npm
   assert.equal('created' in dates, false);
@@ -31,7 +30,7 @@ test('dates = npm ∪ seed, without created/modified', async () => {
 });
 
 test('re-running on identical input appends nothing', async () => {
-  const root = tmp();
+  const root = tmp('ct-');
   const a = await run(slice + extra, root);
   const b = await run(slice + extra, root);
   assert.ok(lines(a.events).length > 0);
@@ -39,7 +38,7 @@ test('re-running on identical input appends nothing', async () => {
 });
 
 test('a bullet edited or inserted under a collected version appends nothing', async () => {
-  const root = tmp();
+  const root = tmp('ct-');
   const a = await run(slice, root);
   const edited = slice.replace('## 2.1.126\n', '## 2.1.126\n\n- Added a brand new bullet');
   const b = await run(edited, root);
@@ -47,7 +46,7 @@ test('a bullet edited or inserted under a collected version appends nothing', as
 });
 
 test('a new version at the top is appended, existing ones are not', async () => {
-  const root = tmp();
+  const root = tmp('ct-');
   const a = await run(slice, root);
   const b = await run(slice.replace('## 2.1.299', '## 2.1.300\n\n- Fixed a thing\n\n## 2.1.299'), root);
   const added = lines(b.events).slice(lines(a.events).length).map((l) => JSON.parse(l));
@@ -56,7 +55,7 @@ test('a new version at the top is appended, existing ones are not', async () => 
 });
 
 test('commits basis: collect appends parsed commits', async () => {
-  const dataRoot = tmp();
+  const dataRoot = tmp('ct-');
   const bun = { id: 'bun', basis: 'commits', sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } } };
   const net = { gitLog: async (git, from, use) => use({ log: () => fx('git-log-bun.txt'), numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])) }) };
   await collect([bun], { dataRoot, net });

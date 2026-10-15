@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { backfillStats } from '../scripts/backfill-stats.js';
+import { tmp } from './tmp.js';
 
 test('backfill adds stats to commit events that lack them, keeps order, bytes and existing stats', () => {
-  const path = join(mkdtempSync(join(tmpdir(), 'ct-backfill-')), 'events.jsonl');
+  const path = join(tmp('ct-backfill-'), 'events.jsonl');
   const before = [
     '{"id":"a","kind":"commit","sha":"a","text":"x"}',
     '{"id":"b","kind":"commit","sha":"b","text":"y","stats":{"add":9,"del":9,"files":9}}',
