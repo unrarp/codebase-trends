@@ -3,10 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textHash } from '../hash.js';
-import { retry } from '../net.js';
+import { retry, RETRY } from '../net.js';
 import { stripTags, textTags } from './changelog-md.js';
 
-const RETRY = { attempts: 3, delays: [2000, 5000] };
 export const GIT_LOG_FORMAT = '%H%x1f%cI%x1f%an%x1f%ae%x1f%s%x1f%b%x1e';
 
 /** `--shallow-since` value: one day before `from` (a commit ts or a `since` date), ISO UTC. */

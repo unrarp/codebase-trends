@@ -5,10 +5,9 @@ import { join } from 'node:path';
 import { collect } from './collect.js';
 import { build } from './build.js';
 import { applyLabels, writeBatches } from './apply-labels.js';
-import { retry } from './net.js';
+import { retry, RETRY } from './net.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const RETRY = { attempts: 3, delays: [2000, 5000] };
 
 /** Empties batchesDir, then writes batch files for every project's pending (none for a project with none); returns the paths. */
 export function prepareBatches(projects, batchesDir, { dataRoot = join(ROOT, 'data') } = {}) {

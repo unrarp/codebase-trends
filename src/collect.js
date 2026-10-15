@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { retry } from './net.js';
+import { retry, RETRY } from './net.js';
 import { appendJsonl, readJsonl } from './store.js';
 import { parseChangelog } from './adapters/changelog-md.js';
 import { fetchNpmTimes } from './adapters/npm-times.js';
@@ -28,7 +28,6 @@ import { collectGitLog, fetchGitLog } from './adapters/git-log.js';
  */
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const RETRY = { attempts: 3, delays: [2000, 5000] };
 
 const fetchText = (url) => retry(async () => {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
