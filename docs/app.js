@@ -45,7 +45,10 @@ const LAST = 'codebase-trends:project';
 const remembered = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
 const remember = (id) => { try { localStorage.setItem(LAST, id); } catch {} };
 const narrow = () => matchMedia('(max-width: 719px)').matches;
-const hover = () => matchMedia('(hover: hover)').matches; // a pointer reads the tooltip by hovering, so one click acts; touch needs a tap to read first
+// A pointer reads the tooltip by hovering, so one click acts; touch needs a tap to read first, then a second to act.
+// Rejected: a button inside the tooltip (needs an HTML tooltip pinned on click) and a "show list" line under the chart
+// (repeated what the tooltip already said); a hint line in the tooltip footer is the whole affordance.
+const hover = () => matchMedia('(hover: hover)').matches;
 
 const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
 const fixes = (r) => (r.counts.fixed ?? 0) + (r.counts.revert ?? 0);
