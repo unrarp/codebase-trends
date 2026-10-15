@@ -65,42 +65,44 @@ async function ping(suffix = '') {
   }, RETRY);
 }
 
-async function main(argv) {
-  const projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8'));
+/** One routine run in the repo at `root`; returns the exit code. Collection, the check and the ping are injectable for tests. */
+export async function main(argv, { root = ROOT, collect: collectAll = collect, check = () => run('npm', ['run', 'check:core'], root), ping: notify = ping } = {}) {
+  const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
+  const dataRoot = join(root, 'data');
   const labelsAt = argv.indexOf('--labels');
   if (labelsAt >= 0) {
     const dir = argv[labelsAt + 1];
     if (!dir) throw new Error('--labels needs a directory');
     const files = readdirSync(dir).sort().map((f) => join(dir, f));
-    for (const [id, n] of Object.entries(applyLabels(files))) console.log(`${id}: appended ${n} labels`);
+    for (const [id, n] of Object.entries(applyLabels(files, { dataRoot, projects }))) console.log(`${id}: appended ${n} labels`);
   } else {
-    await collect(projects);
-    rmSync(join(ROOT, '.routine', 'answers'), { recursive: true, force: true }); // stale answers would fail --labels
-    if (prepareBatches(projects, join(ROOT, '.routine', 'batches')).length > 0) {
+    await collectAll(projects, { dataRoot, seedDir: join(root, 'seed') });
+    rmSync(join(root, '.routine', 'answers'), { recursive: true, force: true }); // stale answers would fail --labels
+    if (prepareBatches(projects, join(root, '.routine', 'batches'), { dataRoot }).length > 0) {
       console.log('RESULT classify .routine/batches/ → .routine/answers/');
       return 3;
     }
   }
 
-  if (!buildIfChanged()) {
+  if (!buildIfChanged({ root })) {
     console.log('RESULT unchanged');
-    await ping();
+    await notify();
     return 0;
   }
   try {
-    run('npm', ['run', 'check:core']);
+    check();
   } catch (e) {
     throw new Error(`check:core failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
   }
 
-  const counts = stageAndCount();
-  run('git', ['commit', '-m', commitMessage(counts)]);
+  const counts = stageAndCount(root);
+  run('git', ['commit', '-m', commitMessage(counts)], root);
   // Routine sessions run on a claude/… branch with no local master, so name the source.
   // The stray-branch push the session's stop hook asks for is declined in ROUTINE.md, not here.
-  run('git', ['push', '-u', 'origin', 'HEAD:master']);
-  const sha = run('git', ['rev-parse', 'HEAD']).trim();
+  run('git', ['push', '-u', 'origin', 'HEAD:master'], root);
+  const sha = run('git', ['rev-parse', 'HEAD'], root).trim();
   console.log(`RESULT committed ${sha} events=${counts.events} labels=${counts.labels}`);
-  await ping();
+  await notify();
   return 0;
 }
 

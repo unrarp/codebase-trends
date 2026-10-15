@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { prepareBatches, countsFromNumstat, commitMessage, stageAndCount, buildIfChanged } from '../src/routine.js';
+import { prepareBatches, countsFromNumstat, commitMessage, stageAndCount, buildIfChanged, main } from '../src/routine.js';
 import { build } from '../src/build.js';
 import { tmp } from './tmp.js';
 
@@ -95,4 +95,85 @@ test('buildIfChanged: an unchanged build keeps the committed generatedAt and rep
   appendFileSync(join(root, 'data', 'sparse', 'events.jsonl'), JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] }) + '\n');
   assert.equal(buildIfChanged({ root, now: new Date(T1) }), true);
   assert.equal(generatedAt(), T1);
+});
+
+// A committed fixture repo with a bare `origin`, as the routine finds its checkout; its own hooks only.
+function routineRepo() {
+  const root = tmp('routine-main-');
+  cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
+  build({ root, now: new Date('2026-10-14T12:00:00.000Z') });
+  const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  for (const [k, v] of [['user.name', 't'], ['user.email', 't@t'], ['core.hooksPath', join(root, '.git', 'no-hooks')]]) git('config', k, v);
+  git('add', '.'); git('commit', '-q', '-m', 'init');
+  const remote = tmp('routine-origin-');
+  execFileSync('git', ['init', '-q', '--bare', remote]);
+  git('remote', 'add', 'origin', remote);
+  const calls = [];
+  const collected = [];
+  const deps = { root, collect: async (projects, opts) => { calls.push('collect'); collected.push(opts); }, check: () => { calls.push('check'); }, ping: async () => { calls.push('ping'); } };
+  const origin = (...a) => execFileSync('git', ['--git-dir', remote, ...a], { encoding: 'utf8' }).trim();
+  return { root, git, origin, calls, collected, deps };
+}
+/** Silences console.log for the test; the returned function lists what was logged so far. */
+const logs = (t) => { const m = t.mock.method(console, 'log', () => {}); return () => m.mock.calls.map((c) => c.arguments[0]); };
+/** Answers every batch line of the last classify hand-off: changelog items `added`, commits `fixed`. */
+function answerBatches(root) {
+  const answers = join(root, '.routine', 'answers');
+  mkdirSync(answers, { recursive: true });
+  for (const f of readdirSync(join(root, '.routine', 'batches'))) {
+    const hashes = readFileSync(join(root, '.routine', 'batches', f), 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split('\t')[0]);
+    writeFileSync(join(answers, f), hashes.map((h) => `${h}: ${f.startsWith('sparse') ? 'fixed' : 'added'}\n`).join(''));
+  }
+  return answers;
+}
+
+test('main with items to label: writes the batches, clears stale answers, exits 3 and commits nothing', async (t) => {
+  const r = routineRepo();
+  mkdirSync(join(r.root, '.routine', 'answers'), { recursive: true });
+  writeFileSync(join(r.root, '.routine', 'answers', 'claude-code-9.txt'), 'stale');
+  const head = r.git('rev-parse', 'HEAD');
+  const out = logs(t);
+  assert.equal(await main([], r.deps), 3);
+  assert.deepEqual(readdirSync(join(r.root, '.routine', 'batches')).sort(), ['claude-code-1.txt', 'sparse-1.txt']); // each fixture project has one pending item
+  assert.equal(existsSync(join(r.root, '.routine', 'answers')), false);
+  assert.equal(out().at(-1), 'RESULT classify .routine/batches/ → .routine/answers/');
+  assert.deepEqual(r.calls, ['collect']);
+  assert.deepEqual(r.collected, [{ dataRoot: join(r.root, 'data'), seedDir: join(r.root, 'seed') }]); // the checkout's data, not this repo's
+  assert.equal(r.git('rev-parse', 'HEAD'), head);
+});
+
+test('main --labels: appends the answers, checks, commits and pushes to master, then pings; the next run is unchanged', async (t) => {
+  const r = routineRepo();
+  const out = logs(t);
+  await main([], r.deps);
+  const answers = answerBatches(r.root);
+  r.calls.length = 0;
+  assert.equal(await main(['--labels', answers], r.deps), 0);
+  assert.deepEqual(r.calls, ['check', 'ping']);
+  const sha = r.git('rev-parse', 'HEAD');
+  assert.equal(r.origin('rev-parse', 'master'), sha); // pushed from a branch that is not master
+  assert.equal(r.origin('log', '-1', '--format=%s', 'master'), 'data: claude-code, sparse +0 events, +2 labels');
+  assert.equal(out().at(-1), `RESULT committed ${sha} events=0 labels=2`);
+  assert.equal(r.git('status', '--porcelain', '--', 'data', 'docs'), '');
+
+  r.calls.length = 0;
+  assert.equal(await main([], r.deps), 0); // nothing new: no batches, no build change, no commit
+  assert.deepEqual(r.calls, ['collect', 'ping']);
+  assert.equal(out().at(-1), 'RESULT unchanged');
+  assert.equal(r.origin('rev-parse', 'master'), sha);
+});
+
+test('main stops before committing when check:core fails, and reports its output', async (t) => {
+  const r = routineRepo();
+  logs(t);
+  await main([], r.deps);
+  const answers = answerBatches(r.root);
+  const head = r.git('rev-parse', 'HEAD');
+  r.calls.length = 0;
+  const check = () => { throw Object.assign(new Error('exit 1'), { stdout: 'not ok 1 - x\n', stderr: '' }); };
+  await assert.rejects(main(['--labels', answers], { ...r.deps, check }), /^Error: check:core failed\nnot ok 1 - x/);
+  assert.equal(r.git('rev-parse', 'HEAD'), head);
+  assert.equal(r.origin('branch', '--list'), ''); // nothing pushed
+  assert.deepEqual(r.calls, []); // no success ping: the CLI pings /fail on the throw
 });
