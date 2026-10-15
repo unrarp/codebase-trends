@@ -1,6 +1,6 @@
 # Routine instructions
 
-The hourly routine's saved prompt only points here. Follow these steps exactly,
+The six-hourly routine's saved prompt only points here. Follow these steps exactly,
 in order. Run no other command.
 
 1. Run `node src/routine.js`.

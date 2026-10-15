@@ -6,15 +6,15 @@
   Playwright is the only devDependency. No TypeScript, bundler, Bun (cloud
   sessions cannot `bun install`) or GitHub Actions.
 - **`data/` and `docs/` (except `docs/vendor/`) are machine-written** by
-  `src/collect.js`, `src/build.js`, `scripts/classify-local.sh` and the hourly
+  `src/collect.js`, `src/build.js`, `scripts/classify-local.sh` and the six-hourly
   routine. Never hand-edit them.
 - **`npm run check` must pass before every push from a dev machine**
-  (`hooks/pre-push` enforces it). The hourly routine has no browser, so it
+  (`hooks/pre-push` enforces it). The routine has no browser, so it
   runs `npm run check:core` before every commit instead.
 - **Never `git add -A` or `git add .`** — add paths explicitly.
 - **Tests must be seen failing** before they count: bug fixes fail before the
   fix; other new tests are broken deliberately, watched failing, then restored.
-- **The routine runs hourly and commits to `master` whenever data changed** —
+- **The routine runs every six hours and commits to `master` whenever data changed** —
   `git pull --rebase` before pushing. Change what it does through tracked files (`ROUTINE.md`,
   `src/routine.js`), never the saved prompt on claude.ai.
 - **Categories are derived at build, never stored on events** — fix a

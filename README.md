@@ -4,8 +4,9 @@ Static dashboard at <https://unrarp.github.io/codebase-trends/> showing, per
 tracked project, how much of the work landing over time is new capability
 versus correction, overlaid with model-release markers.
 
-An hourly Claude Code routine (instructions in [`ROUTINE.md`](ROUTINE.md))
-collects data, commits it to this repo, and GitHub Pages serves `docs/`.
+A Claude Code routine (instructions in [`ROUTINE.md`](ROUTINE.md)) runs every
+six hours, collects data, commits it to this repo, and GitHub Pages serves
+`docs/`.
 
 ## What the site shows
 
@@ -68,11 +69,11 @@ them by hand.
 
 ## Routine
 
-An hourly Claude Code routine runs `node src/routine.js`, which collects every
-project and builds the site. If that changes nothing under `data/` or `docs/`
-it stops there; otherwise it runs `npm run check:core`, commits `data/` and
-`docs/` and pushes to `master`. Either way a successful run pings
-healthchecks.io.
+Every six hours (`0 */6 * * *`) a Claude Code routine runs `node src/routine.js`,
+which collects every project and builds the site. If that changes nothing under
+`data/` or `docs/` it stops there; otherwise it runs `npm run check:core`,
+commits `data/` and `docs/` and pushes to `master`. Either way a successful run
+pings healthchecks.io (period 6 h).
 
 - **Classify hand-off:** if new events have no rule category, the script writes
   batches to `.routine/batches/` and exits 3. The agent labels them using
@@ -107,7 +108,7 @@ healthchecks.io.
    and `docs/` together (collect runs every project, so other projects may have
    new data too) and push.
 
-Pushing the config before the backfill would make the next hourly run try to
+Pushing the config before the backfill would make the next run try to
 classify the project's whole history in one session. Pages and the project
 switcher are generated from config; a new project needs no code.
 
