@@ -98,3 +98,9 @@ test('pendingOf = rule-null events without a classification, one per textHash, t
   writeFileSync(join(dataRoot, 'claude-code', 'classifications.jsonl'), JSON.stringify({ textHash: hash, category: 'added', model: 'm', ts: '2026-10-14T00:00:00Z' }) + '\n');
   assert.deepEqual(pendingOf(project, { dataRoot }).map((x) => x.text), ['Internal infrastructure improvements (no user-facing changes)']);
 });
+
+test('answer lines may carry surrounding whitespace or CRLF endings', () => {
+  const t = setup();
+  const counts = t.apply([t.answer('p-1.txt', `${H(1)}: fixed \r\n  ${H(2)}: added\r\n`)]);
+  assert.deepEqual(counts, { p: 2 });
+});

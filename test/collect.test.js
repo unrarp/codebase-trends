@@ -13,9 +13,9 @@ const slice = fx('changelog-slice.md');
 const extra = fx('changelog-extra.md');
 const packument = JSON.parse(fx('npm-time.json'));
 
-const run = async (md, dataRoot) => {
+const run = async (md, dataRoot, seedDir = SEED) => {
   const net = { fetchText: async () => md, fetchJson: async () => packument };
-  await collect([project], { dataRoot, seedDir: SEED, net });
+  await collect([project], { dataRoot, seedDir, net });
   const f = (n) => { try { return readFileSync(join(dataRoot, 'claude-code', n), 'utf8'); } catch { return ''; } };
   return { events: f('events.jsonl'), dates: JSON.parse(f('dates.json')) };
 };
@@ -27,6 +27,11 @@ test('dates = npm ∪ seed, without created/modified', async () => {
   assert.equal(dates['2.1.43'], '2026-02-16T21:34:15.000Z'); // seed only: not on npm
   assert.equal('created' in dates, false);
   assert.equal('modified' in dates, false);
+});
+
+test('a changelog project without a seed file takes its dates from npm alone', async () => {
+  const { dates } = await run(slice + extra, tmp('ct-'), tmp('ct-seed-'));
+  assert.deepEqual(dates, Object.fromEntries(Object.entries(packument.time).filter(([k]) => k !== 'created' && k !== 'modified')));
 });
 
 test('re-running on identical input appends nothing', async () => {
