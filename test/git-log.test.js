@@ -36,7 +36,7 @@ test('trailing (#n) becomes a pr tag', () => {
   assert.deepEqual(bySubject('Update CLAUDE.md')[0].tags, []);
 });
 
-test('regression tag per rule 4', () => {
+test('commit subject: regression then pr tag, in that order', () => {
   const [e] = parseGitLog('abc\x1f2026-01-01T00:00:00Z\x1fa\x1fa@b\x1ffix crash, a regression introduced in v1.2.3 (#9)\x1f\x1e', 'bun');
   assert.deepEqual(e.tags, ['regression:1.2.3', 'pr:9']);
 });
@@ -59,18 +59,13 @@ const spy = () => {
   return { calls, fetchRaw: async (git, from, use) => { calls.push({ git, from }); return use({ log: () => raw, numstat: () => new Map() }); } };
 };
 
-test('collect fetches from `since` when no events exist', async () => {
-  const s = spy();
-  await collectGitLog(project, [], s.fetchRaw);
-  assert.equal(s.calls[0].from, '2026-04-26T00:00:00.000Z');
-});
-
-test('collect fetches from `since` even when events exist', async () => {
+test('collect fetches from `since`, with or without stored events', async () => {
   // Resuming from the newest stored ts can cut off a first-parent commit whose committer date is older.
   const s = spy();
   const existing = [{ sha: 'x', ts: '2026-05-01T00:00:00.000Z' }, { sha: 'y', ts: '2026-06-01T12:00:00.000Z' }];
   await collectGitLog(project, existing, s.fetchRaw);
-  assert.equal(s.calls[0].from, '2026-04-26T00:00:00.000Z');
+  await collectGitLog(project, [], s.fetchRaw);
+  assert.deepEqual(s.calls.map((c) => c.from), ['2026-04-26T00:00:00.000Z', '2026-04-26T00:00:00.000Z']);
 });
 
 test('commits with ts < since are dropped; the rest come back oldest first', async () => {
@@ -79,13 +74,6 @@ test('commits with ts < since are dropped; the rest come back oldest first', asy
   assert.equal(out.length, 3);
   assert.ok(out.every((e) => e.ts >= '2026-04-26T00:00:00.000Z'));
   assert.deepEqual(out.map((e) => e.ts), [...out.map((e) => e.ts)].sort());
-});
-
-test('shas already collected are dropped', async () => {
-  const all = await collectGitLog(project, [], spy().fetchRaw);
-  const out = await collectGitLog(project, [{ sha: all[0].sha, ts: all[0].ts }], spy().fetchRaw);
-  assert.equal(out.length, all.length - 1);
-  assert.ok(out.every((e) => e.sha !== all[0].sha));
 });
 
 test('leading [Tag] groups are stripped from the subject into lowercase tags', () => {

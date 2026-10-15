@@ -52,7 +52,7 @@ for (const [prefix, category] of Object.entries(PREFIXES)) {
   }
 }
 
-test('commit Revert/revert -> revert, and beats first-word rules', () => {
+test('commit Revert/revert/reverted… -> revert', () => {
   assert.equal(cm('Revert "fix: x"'), 'revert');
   assert.equal(cm('revert the thing'), 'revert');
   assert.equal(cm('reverted x'), 'revert');

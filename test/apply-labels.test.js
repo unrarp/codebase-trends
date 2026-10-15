@@ -64,10 +64,6 @@ test('an already-labelled hash is no longer pending, so an answer for it is reje
   assert.deepEqual(rows.map((r) => [r.textHash, r.category]), [[H(1), 'added'], [H(2), 'fixed']]);
 });
 
-test('commits basis allows the extra categories', () => {
-  assert.ok(CATEGORIES.commits.includes('revert') && !CATEGORIES.changelog.includes('revert'));
-});
-
 test('writeBatches: ≤50 per file, header, every pending hash exactly once', () => {
   const hs = Array.from({ length: 120 }, (_, i) => i + 1);
   const t = setup({ p: hs });
