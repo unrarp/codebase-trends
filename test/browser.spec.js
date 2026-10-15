@@ -324,7 +324,7 @@ test('dates show the year only when more than a year old', async ({ page }) => {
 test('an old week across New Year names both years', async ({ page }) => {
   await page.route('**/data/claude-code/weekly.json', async (route) => {
     const res = await route.fetch();
-    await route.fulfill({ response: res, json: [{ d: '2024-12-30', counts: {}, total: 0, fixShare: null }, ...(await res.json())] });
+    await route.fulfill({ response: res, json: [{ d: '2024-12-30', counts: {}, total: 0 }, ...(await res.json())] });
   });
   await open(page, 'claude-code/');
   expect(await page.evaluate(() => __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: 0 }]))).toBe('Dec 30, 2024 – Jan 5, 2025 · 0 items');

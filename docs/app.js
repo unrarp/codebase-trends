@@ -90,7 +90,7 @@ async function projectPage() {
   // Weekly rows extended with empty rows up to the current week so the not-yet-collected span is on the axis.
   const rows = [...weeklyRaw];
   for (let t = Date.parse(`${rows.at(-1).d}T00:00:00Z`) + WEEK; dayOf(t) <= mondayOf(dayOf(now)); t += WEEK) {
-    rows.push({ d: dayOf(t), counts: {}, total: 0, fixShare: null });
+    rows.push({ d: dayOf(t), counts: {}, total: 0 });
   }
   const anchor = Date.parse(`${rows[0].d}T00:00:00Z`);
   const end = anchor + rows.length * WEEK;
