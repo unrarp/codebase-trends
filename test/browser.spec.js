@@ -405,13 +405,16 @@ test('the theme button cycles auto, light, dark; a forced theme beats the OS and
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /theme/.test(k)))).toEqual([]);
 });
 
-test('a stored theme applies before app.js runs, so the page never flashes the other scheme', async ({ browser }) => {
-  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
-  await page.goto(`${base}claude-code/`);
-  await page.evaluate(() => localStorage.setItem('codebase-trends:theme', 'dark'));
-  await page.route('**/app.js*', (r) => r.abort()); // no app.js at all: only the page's own head can set it
-  await page.reload();
-  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(13, 15, 18)');
+test('a stored theme applies from the page\'s own head, before app.js: on the root and on a project page', async ({ browser }) => {
+  for (const path of ['', 'claude-code/']) {
+    const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
+    await page.goto(`${base}claude-code/`);
+    await page.evaluate(() => localStorage.setItem('codebase-trends:theme', 'dark'));
+    await page.route('**/app.js*', (r) => r.abort()); // hold the page: no redirect, only its own head runs
+    await page.goto(base + path);
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), path || 'root').toBe('rgb(13, 15, 18)');
+    await page.context().close();
+  }
 });
 
 test('category tags in the week list keep their text readable (4.5:1) in both schemes', async ({ browser }) => {

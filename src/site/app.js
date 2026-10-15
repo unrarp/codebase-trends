@@ -43,7 +43,7 @@ const weekSpan = (d, year) => {
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const pct = (x) => `${Math.round(x * 100)}%`;
 const LAST = 'codebase-trends:project';
-const THEME = 'codebase-trends:theme'; // page.html's head reads it too, to apply a picked theme before the first paint
+const THEME = 'codebase-trends:theme'; // the head of page.html and index.html reads it too, to apply a picked theme before the first paint
 // Storage throws when the browser blocks it; remembering is optional. A null value forgets.
 const remembered = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const remember = (key, value) => { try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch {} };
