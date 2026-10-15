@@ -110,7 +110,7 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await expect(page.locator('#legend-hatch')).toBeHidden();
     });
 
-    test('model markers days apart do not collide', async ({ page }) => {
+    test('only major model releases get a marker and a chip', async ({ page }) => {
       await open(page, 'claude-code/');
       const m = await page.evaluate(() => __chart.$markers);
       expect(m.map((k) => k.n)).toEqual([1]);
@@ -119,6 +119,18 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(await page.locator('#chips .chip .date').first().isVisible()).toBe(!mobile); // dates only on wide screens
       await expect(page.locator('#legend')).toContainText('Major model release');
       expect(m[0].y).not.toBeNull(); // badges are drawn in both viewports
+    });
+
+    test('model markers a day apart stack instead of colliding', async ({ page }) => {
+      await page.route('**/data/annotations.json', async (route) => {
+        const res = await route.fetch();
+        await route.fulfill({ response: res, json: (await res.json()).map((a) => ({ ...a, major: true })) }); // Model B, a day after A
+      });
+      await open(page, 'claude-code/');
+      const m = await page.evaluate(() => __chart.$markers);
+      expect(m.map((k) => k.n)).toEqual([1, 2]);
+      expect(Math.abs(m[1].x - m[0].x)).toBeLessThan(20); // closer than a badge is wide: on one row they would overlap
+      expect(m[1].y).not.toBe(m[0].y);
     });
 
     test('sparse commits project shows four KPI tiles, the last one commit size with its own note', async ({ page }) => {
@@ -140,14 +152,15 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       for (const t of await refs.allTextContents()) expect(t).toContain('vs prior period');
     });
 
-    test('fix share line is the 4-week pooled share of the weekly rows', async ({ page }) => {
-      await open(page, 'claude-code/');
+    // sparse: its revert counts as a fix, which the changelog project cannot show
+    for (const id of ['claude-code', 'sparse']) test(`fix share line is the 4-week pooled share of the weekly rows: ${id}`, async ({ page }) => {
+      await open(page, `${id}/`);
       const fix = await page.evaluate(() => { const d = __chart.data.datasets.find((x) => x.label === 'Fixes %'); return { axis: d.yAxisID, v: d.data }; });
       expect(fix.axis).toBe('y1');
       const vals = fix.v.filter((v) => v !== null);
       expect(vals.length).toBeGreaterThan(0);
       expect(vals.every((v) => v >= 0 && v <= 1)).toBe(true);
-      const weekly = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'));
+      const weekly = JSON.parse(readFileSync(join(out, `data/${id}/weekly.json`), 'utf8'));
       const c = (r, k) => r.counts[k] ?? 0;
       const pooled = (rows) => {
         const den = rows.reduce((s, r) => s + ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'].reduce((a, k) => a + c(r, k), 0), 0); // the four counted buckets
@@ -349,15 +362,15 @@ test('commit size is the median over the window\'s sizes, compared with the prio
   await page.route('**/data/sparse/weekly.json', async (route) => {
     const rows = JSON.parse(readFileSync(join(out, 'data/sparse/weekly.json'), 'utf8'));
     for (const r of rows) {
-      if (r.d === '2026-09-28') r.lines = [10, 30];
-      if (r.d === '2026-10-05') r.lines = [20];
+      if (r.d === '2026-09-28') r.lines = [10, 40];
+      if (r.d === '2026-10-05') r.lines = [20, 60];
     }
     await route.fulfill({ json: rows });
   });
   await open(page, 'sparse/');
   const tile = page.locator('#kpis .kpi').last();
-  await expect(tile.locator('.v')).toHaveText('20'); // median of 10, 20, 30 in the last 4 complete weeks
-  await expect(tile.locator('.ref')).toHaveText('−50% vs prior period (40)'); // the revert d4 (40 lines) in the 4 weeks before
+  await expect(tile.locator('.v')).toHaveText('30'); // 10, 20, 40, 60 in the last 4 complete weeks: an even count takes the mean of the middle two
+  await expect(tile.locator('.ref')).toHaveText('−25% vs prior period (40)'); // the revert d4 (40 lines), alone in the 4 weeks before
 });
 
 // The panel's background as the canvas sees it, beside what the chart drew: the line's halo, a bar's gap edge and
@@ -442,4 +455,34 @@ test('category tags in the week list keep their text readable (4.5:1) in both sc
     expect(Object.keys(ratios).sort()).toEqual(['added', 'changed', 'fixed', 'revert']);
     for (const [tag, ratio] of Object.entries(ratios)) expect(ratio, `${colorScheme} ${tag}`).toBeGreaterThanOrEqual(4.5);
   }
+});
+
+test('each KPI tile is its measure over the last 4 complete weeks against the 4 before', async ({ page }) => {
+  // Exactly 8 complete weeks and the current one: both windows full, the shortest history that has a prior period.
+  const rows = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8')).slice(-9);
+  const counts = (i) => (i < 4 ? { fixed: 1, changed: 1 } : i < 8 ? { added: 2, fixed: 1, changed: 1 } : {});
+  const weekly = rows.map((r, i) => ({ d: r.d, counts: counts(i), total: Object.values(counts(i)).reduce((a, b) => a + b, 0) }));
+  // Versions: 2 in the prior weeks (08-17 – 09-13), 6 in the last (09-14 – 10-11), 1 in the current week (not in either).
+  const releases = ['2026-08-18', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-22', '2026-09-29', '2026-10-06', '2026-10-11', '2026-10-13']
+    .map((d, i) => ({ version: `9.9.${i}`, ts: `${d}T12:00:00.000Z`, count: 1 }));
+  await page.route('**/data/claude-code/weekly.json', (route) => route.fulfill({ json: weekly }));
+  await page.route('**/data/claude-code/releases.json', (route) => route.fulfill({ json: releases }));
+  await open(page, 'claude-code/');
+  expect(weekly[0].d).toBe('2026-08-17');
+  await expect(page.locator('#kpis .kpi .v')).toHaveText(['4', '2', '25%', '1.5']);
+  await expect(page.locator('#kpis .kpi .ref')).toHaveText([
+    '+100% vs prior period (2)', // items: 4 a week vs 2
+    '– vs prior period (0)', // new features: none before, so no ratio
+    '−25 pts vs prior period (50%)', // fixes: 4 of 16 vs 4 of 8
+    '+200% vs prior period (0.5)', // versions: 6 in 4 weeks vs 2
+  ]);
+});
+
+test('a bot commit carries a bot badge in the list, a person\'s does not', async ({ page }) => {
+  await open(page, 'sparse/#2026-08-21'); // d4: carol, co-authored by ci[bot]
+  await expect(page.locator('#drill li.ev')).toHaveCount(1);
+  await expect(page.locator('#drill li.ev .badge')).toHaveText('bot');
+  await open(page, 'sparse/#2026-08-03'); // a1: alice
+  await expect(page.locator('#drill li.ev')).toHaveCount(1);
+  await expect(page.locator('#drill li.ev .badge')).toHaveCount(0);
 });
