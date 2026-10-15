@@ -355,3 +355,82 @@ test('commit size is the median over the window\'s sizes, compared with the prio
   await expect(tile.locator('.v')).toHaveText('20'); // median of 10, 20, 30 in the last 4 complete weeks
   await expect(tile.locator('.ref')).toHaveText('−50% vs prior period (40)'); // the revert d4 (40 lines) in the 4 weeks before
 });
+
+// The panel's background as the canvas sees it, beside what the chart drew: the line's halo, a bar's gap edge and
+// the inside of a model-marker badge (left of its digit) should all be that colour.
+const colours = (page) => page.evaluate(() => {
+  const hex = (c) => { const g = document.createElement('canvas').getContext('2d'); g.fillStyle = c; return g.fillStyle; };
+  const halo = __chart.data.datasets.findIndex((d) => d.label === 'halo');
+  const [m] = __chart.$markers;
+  const r = __chart.currentDevicePixelRatio;
+  const px = __chart.ctx.getImageData(Math.round((m.x - 5) * r), Math.round(m.y * r), 1, 1).data;
+  return {
+    panel: hex(getComputedStyle(document.querySelector('.panel')).backgroundColor),
+    drawn: [hex(__chart.getDatasetMeta(halo).dataset.options.borderColor), hex(__chart.getDatasetMeta(0).data[0].options.borderColor), hex(`rgb(${px[0]},${px[1]},${px[2]})`)],
+  };
+});
+const LIGHT = '#ffffff';
+const DARK = '#12151a';
+const painted = (panel) => ({ panel, drawn: [panel, panel, panel] });
+
+test('the page and the chart follow the colour scheme, live, without a reload', async ({ browser }) => {
+  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
+  await open(page, 'claude-code/');
+  expect(await colours(page)).toEqual(painted(LIGHT));
+  // The change event comes some frames later; a listener made after app.js's runs after it (creation order), so its
+  // firing means the chart has already repainted.
+  const changed = page.evaluate(() => new Promise((r) => matchMedia('(prefers-color-scheme: dark)').addEventListener('change', r, { once: true })));
+  await page.emulateMedia({ colorScheme: 'dark' }); await changed;
+  expect(await colours(page)).toEqual(painted(DARK));
+});
+
+test('the theme button cycles auto, light, dark; a forced theme beats the OS and survives a reload', async ({ browser }) => {
+  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
+  await open(page, 'claude-code/');
+  const button = page.locator('#theme');
+  await expect(button).toHaveAccessibleName(/^Theme: auto/i);
+  expect(await colours(page)).toEqual(painted(LIGHT));
+  await button.click(); await frame(page);
+  await expect(button).toHaveAccessibleName(/^Theme: light/i);
+  expect(await colours(page)).toEqual(painted(LIGHT));
+  await button.click(); await frame(page);
+  await expect(button).toHaveAccessibleName(/^Theme: dark/i);
+  expect(await colours(page)).toEqual(painted(DARK)); // forced dark on a light OS
+  await page.reload(); await page.waitForFunction(() => window.__chart);
+  await expect(button).toHaveAccessibleName(/^Theme: dark/i);
+  expect(await colours(page)).toEqual(painted(DARK));
+  await button.click(); await frame(page); // back to auto: the OS (light) decides again, and nothing is stored
+  await expect(button).toHaveAccessibleName(/^Theme: auto/i);
+  expect(await colours(page)).toEqual(painted(LIGHT));
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /theme/.test(k)))).toEqual([]);
+});
+
+test('a stored theme applies before app.js runs, so the page never flashes the other scheme', async ({ browser }) => {
+  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
+  await page.goto(`${base}claude-code/`);
+  await page.evaluate(() => localStorage.setItem('codebase-trends:theme', 'dark'));
+  await page.route('**/app.js*', (r) => r.abort()); // no app.js at all: only the page's own head can set it
+  await page.reload();
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(13, 15, 18)');
+});
+
+test('category tags in the week list keep their text readable (4.5:1) in light mode', async ({ browser }) => {
+  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
+  const ratios = {};
+  for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) { // between them, one tag per bucket
+    await open(page, path);
+    await expect(page.locator('#drill li.ev .tag').first()).toBeVisible();
+    Object.assign(ratios, await page.evaluate(() => {
+      // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
+      const rgb = (c) => { const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+      const lum = (c) => rgb(c).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+      return Object.fromEntries([...document.querySelectorAll('#drill .tag')].map((t) => {
+        const s = getComputedStyle(t);
+        const [a, b] = [lum(s.backgroundColor), lum(s.color)].sort((x, y) => y - x);
+        return [t.textContent, Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100];
+      }));
+    }));
+  }
+  expect(Object.keys(ratios).sort()).toEqual(['added', 'changed', 'fixed', 'revert']);
+  for (const [tag, ratio] of Object.entries(ratios)) expect(ratio, tag).toBeGreaterThanOrEqual(4.5);
+});

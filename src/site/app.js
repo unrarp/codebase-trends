@@ -3,7 +3,8 @@
 // pair passes the CVD and normal-vision checks on the panel surface). Any category outside them — maintenance
 // (chore, test, docs, ci), other, or one the build adds later — is not a product change and is not counted.
 // Changing a colour or the order: re-run the dataviz skill's validate_palette.js with the new hex list in this
-// order, `--mode dark --surface '#12151a'`, and keep only an order that passes (stack gaps cover a CVD WARN).
+// order against both panel surfaces, `--mode dark --surface '#12151a'` and `--mode light --surface '#ffffff'`, and keep
+// only an order that passes both (stack gaps cover a CVD WARN). The same hexes serve both schemes.
 const GROUPS = [
   { key: 'changed', color: '#c98500', cats: ['changed', 'improved'] },
   { key: 'fixed', color: '#3987e5', cats: ['fixed'] },
@@ -11,15 +12,16 @@ const GROUPS = [
   { key: 'removed', color: '#e66767', cats: ['removed', 'revert'] },
 ];
 const groupOf = (cat) => GROUPS.find((g) => g.cats.includes(cat)) ?? null;
-const ACCENT = '#e8702a';
-const MARKER = '#f0932b';
-const PANEL = '#12151a';
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
 const ROLL = 4; // weeks in the rolling fix share window and in each KPI window
 const PX_PER_WEEK = 12; // narrow screens: the chart scrolls sideways at this width per week
 
 const $ = (id) => document.getElementById(id);
+// The canvas cannot use CSS variables, so the chart asks for them at paint time: setting one as a hidden element's
+// colour resolves its light-dark() pair for the current scheme. Nothing is cached, so a scheme change needs only a redraw.
+const ink = Object.assign(document.createElement('i'), { hidden: true });
+const css = (name) => { ink.style.color = `var(--${name})`; return getComputedStyle(ink).color; };
 const el = (tag, { dataset, ...props } = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); Object.assign(n.dataset, dataset); n.append(...kids); return n; };
 const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); });
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
@@ -41,9 +43,18 @@ const weekSpan = (d, year) => {
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const pct = (x) => `${Math.round(x * 100)}%`;
 const LAST = 'codebase-trends:project';
-// Storage throws when the browser blocks it; remembering the project is optional.
-const remembered = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
-const remember = (id) => { try { localStorage.setItem(LAST, id); } catch {} };
+const THEME = 'codebase-trends:theme'; // page.html's head reads it too, to apply a picked theme before the first paint
+// Storage throws when the browser blocks it; remembering is optional. A null value forgets.
+const remembered = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+const remember = (key, value) => { try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch {} };
+// The button cycles through these; the current one is the root's data-theme, absent for auto (the OS decides).
+// Icons are SVG in the text colour: font glyphs for them render tiny or as emoji, depending on the platform.
+const icon = (body) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${body}</svg>`;
+const THEMES = [
+  { key: 'auto', icon: icon('<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/>') },
+  { key: 'light', icon: icon('<circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>') },
+  { key: 'dark', icon: icon('<path d="M13.5 9.8A5.8 5.8 0 0 1 6.2 2.5a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/>') },
+];
 const narrow = () => matchMedia('(max-width: 719px)').matches;
 // A pointer reads the tooltip by hovering, so one click acts; touch needs a tap to read first, then a second to act.
 // Rejected: a button inside the tooltip (needs an HTML tooltip pinned on click) and a "show list" line under the chart
@@ -68,7 +79,8 @@ async function projectPage() {
     get(`${D}${id}/daily.json`), get(`${D}${id}/weekly.json`), changelog ? get(`${D}${id}/releases.json`) : [],
   ]);
   const vendors = projects.find((p) => p.id === id).annotations;
-  remember(id);
+  remember(LAST, id);
+  document.body.append(ink);
   $('switch').replaceChildren(...projects.map((p) => el('option', { value: p.id, textContent: p.name, selected: p.id === id })));
   $('switch').addEventListener('change', (e) => { location.href = `../${e.target.value}/`; });
   const now = Date.now();
@@ -130,13 +142,17 @@ async function projectPage() {
   // ---- shared chart furniture: not-yet-collected hatch, model markers ----
   const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.date) + DAY > anchor;
   const major = annotations.filter((a) => a.kind === 'model' && a.major && inRange(a)).sort((a, b) => (a.date + a.label < b.date + b.label ? -1 : 1));
-  const pattern = (() => {
-    const c = el('canvas', { width: 8, height: 8 });
-    const g = c.getContext('2d');
-    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
-    return c;
-  })();
+  const patterns = new Map(); // one hatch tile per stroke colour, so a hover redraw reuses it
+  const pattern = (stroke) => {
+    if (!patterns.has(stroke)) {
+      const c = el('canvas', { width: 8, height: 8 });
+      const g = c.getContext('2d');
+      g.strokeStyle = stroke; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
+      patterns.set(stroke, c);
+    }
+    return patterns.get(stroke);
+  };
   const toX = (chart, t) => {
     const sx = chart.scales.x;
     const slot = sx.getPixelForValue(1) - sx.getPixelForValue(0);
@@ -153,12 +169,12 @@ async function projectPage() {
         const x0 = Math.max(a.left, toX(chart, anchor + selected * WEEK));
         const x1 = Math.min(a.right, toX(chart, anchor + (selected + 1) * WEEK));
         chart.$selected = { x0, x1, width: Math.max(0, x1 - x0) };
-        ctx.fillStyle = 'rgba(232,234,237,.1)'; ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
+        ctx.fillStyle = css('pick'); ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top);
       }
       const x0 = Math.max(a.left, toX(chart, generatedAt));
       const x1 = Math.min(a.right, toX(chart, now));
       chart.$hatch = { x0, x1, width: Math.max(0, x1 - x0) };
-      if (x1 > x0) { ctx.fillStyle = ctx.createPattern(pattern, 'repeat'); ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top); }
+      if (x1 > x0) { ctx.fillStyle = ctx.createPattern(pattern(css('hatch')), 'repeat'); ctx.fillRect(x0, a.top, x1 - x0, a.bottom - a.top); }
       const entry = $('legend-hatch'); // the legend only explains a hatch that is on screen
       if (entry) entry.hidden = x1 - x0 < 1; // a sub-pixel hatch right after a sync is not on screen
       ctx.restore();
@@ -166,6 +182,7 @@ async function projectPage() {
     afterDraw(chart) {
       const { ctx, chartArea: a } = chart;
       const rowEnd = [];
+      const [marker, panel] = [css('marker'), css('panel')];
       chart.$markers = [];
       ctx.save();
       major.forEach((m, i) => {
@@ -175,11 +192,11 @@ async function projectPage() {
         if (r < 0) r = Math.min(rowEnd.length, 2);
         rowEnd[r] = x;
         const y = a.top - 14 - r * 22;
-        ctx.strokeStyle = MARKER; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = marker; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
         ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x, a.bottom); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = MARKER; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = panel; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = marker; ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(String(i + 1), x, y + 0.5);
         chart.$markers.push({ n: i + 1, x, y });
       });
@@ -230,10 +247,10 @@ async function projectPage() {
       datasets: [
         ...groups.map((g) => ({
           label: cap(g.key), data: rows.map((r) => sum(catsOf(g), (c) => r.counts[c] ?? 0)), backgroundColor: fade(g.color),
-          stack: 's', borderColor: PANEL, borderWidth: { top: 1 }, borderSkipped: false, categoryPercentage: 1, barPercentage: 0.85, order: 2,
+          stack: 's', borderColor: () => css('panel'), borderWidth: { top: 1 }, borderSkipped: false, categoryPercentage: 1, barPercentage: 0.85, order: 2,
         })),
-        line('halo', PANEL, 5, 1), // a dark outline keeps the line legible over bars of any colour
-        line(FIX, ACCENT, 2, 0),
+        line('halo', () => css('panel'), 5, 1), // an outline in the panel colour keeps the line legible over bars of any colour
+        line(FIX, () => css('accent'), 2, 0),
       ],
     },
     options: {
@@ -247,9 +264,9 @@ async function projectPage() {
         tooltip: { // the week and its total in the title, the buckets that landed, the line last, the hint muted
           filter: (it) => it.dataset.label !== 'halo' && (it.dataset.type === 'line' || it.parsed.y > 0 || shown(rows[it.dataIndex]) === 0), // zero buckets drop out, unless the week is empty: the title needs an item
           itemSort: (a, b) => (a.dataset.type === 'line') - (b.dataset.type === 'line'),
-          backgroundColor: 'rgba(13,15,18,.96)', borderColor: '#2b3038', borderWidth: 1, cornerRadius: 8, padding: 10, caretSize: 6,
-          titleFont: { weight: '600' }, titleMarginBottom: 8, bodySpacing: 4, boxWidth: 8, boxHeight: 8, boxPadding: 4,
-          footerFont: { weight: 'normal' }, footerColor: '#8b919a', footerMarginTop: 8,
+          backgroundColor: () => css('tip-bg'), borderColor: () => css('tip-line'), borderWidth: 1, cornerRadius: 8, padding: 10, caretSize: 6,
+          titleColor: () => css('tip-text'), bodyColor: () => css('tip-text'), titleFont: { weight: '600' }, titleMarginBottom: 8, bodySpacing: 4, boxWidth: 8, boxHeight: 8, boxPadding: 4,
+          footerFont: { weight: 'normal' }, footerColor: () => css('muted'), footerMarginTop: 8,
           callbacks: {
             title: (items) => weekTitle(items[0].dataIndex),
             label: (it) => `${it.dataset.label}  ${it.dataset.label === FIX ? pct(it.parsed.y) : it.parsed.y}`,
@@ -259,8 +276,8 @@ async function projectPage() {
       },
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow() ? 8 : 10, callback(v) { return fmt(this.getLabelForValue(v)); } } },
-        y: { stacked: true, beginAtZero: true, position: narrow() ? 'right' : 'left', grid: { color: '#1b1f25' }, ticks: { maxTicksLimit: 6 } }, // layout() keeps these in step
-        y1: { position: 'right', min: 0, max: 1, grid: { drawOnChartArea: false }, ticks: { stepSize: 0.25, callback: (v) => pct(v), color: ACCENT } },
+        y: { stacked: true, beginAtZero: true, position: narrow() ? 'right' : 'left', grid: { color: () => css('grid') }, ticks: { maxTicksLimit: 6 } }, // layout() keeps these in step
+        y1: { position: 'right', min: 0, max: 1, grid: { drawOnChartArea: false }, ticks: { stepSize: 0.25, callback: (v) => pct(v), color: () => css('accent') } },
       },
     },
     plugins: [furniture],
@@ -305,7 +322,7 @@ async function projectPage() {
       const ul = el('ul', {}, ...items.map((e) => {
         const group = groupOf(e.category); // never null: the filter above kept only grouped events
         return el('li', { className: 'ev' },
-          el('span', { className: 'tag', style: `background:${group.color}`, textContent: e.category }), // stored label, bucket colour
+          el('span', { className: 'tag', style: `--c:${group.color}`, textContent: e.category }), // stored label, bucket colour
           el('span', { className: 'text', textContent: e.text }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
           ...(changelog ? [] : [e.url ? ext(e.url, e.sha.slice(0, 7), 'ref') : el('span', { className: 'ref', textContent: e.sha.slice(0, 7) })]));
       }));
@@ -331,12 +348,29 @@ async function projectPage() {
   await fromHash();
   addEventListener('hashchange', fromHash);
   addEventListener('resize', () => layout(chart));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => chart.update()); // repaint in the new scheme
+  const root = document.documentElement;
+  const current = () => THEMES.findIndex((t) => t.key === (root.dataset.theme ?? 'auto'));
+  const nextTheme = () => THEMES[(current() + 1) % THEMES.length];
+  const showTheme = () => {
+    const t = THEMES[current()];
+    const label = `Theme: ${t.key}. Click for ${nextTheme().key}.`;
+    Object.assign($('theme'), { innerHTML: t.icon, title: label, ariaLabel: label });
+  };
+  showTheme();
+  $('theme').addEventListener('click', () => {
+    const { key } = nextTheme();
+    if (key === 'auto') delete root.dataset.theme; else root.dataset.theme = key;
+    remember(THEME, key === 'auto' ? null : key);
+    showTheme();
+    chart.update(); // the canvas reads the new colours on redraw
+  });
 }
 
 // The root has no content of its own: it opens the last project viewed, else the first configured.
 async function indexPage() {
   const ids = (await get('./data/projects.json')).map((p) => p.id);
-  const last = remembered();
+  const last = remembered(LAST);
   location.replace(`./${ids.includes(last) ? last : ids[0]}/`);
 }
 

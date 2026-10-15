@@ -1,10 +1,23 @@
-:root { --bg: #0d0f12; --panel: #12151a; --line: #23272e; --text: #e8eaed; --muted: #8b919a; --accent: #e8702a; --marker: #f0932b; }
+/* Every colour is a light-dark(light, dark) pair, picked by color-scheme: the OS's unless the theme button forces one. app.js reads the ones
+   the chart paints through css(), so the canvas follows too; the bucket colours in GROUPS pass on both surfaces. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f6f7f9, #0d0f12); --panel: light-dark(#ffffff, #12151a); --line: light-dark(#dfe2e6, #23272e);
+  --text: light-dark(#16191d, #e8eaed); --muted: light-dark(#5f6670, #8b919a); --link: light-dark(#1f63c6, #7db4ff);
+  --accent: light-dark(#c2410c, #e8702a); --marker: light-dark(#b45309, #f0932b);
+  /* canvas only: grid lines, the not-yet-collected hatch, the picked week, the tooltip */
+  --grid: light-dark(#eceef1, #1b1f25); --hatch: light-dark(rgba(0,0,0,.16), rgba(255,255,255,.22)); --pick: light-dark(rgba(22,25,29,.07), rgba(232,234,237,.1));
+  --tip-bg: light-dark(rgba(255,255,255,.97), rgba(13,15,18,.96)); --tip-line: light-dark(#dfe2e6, #2b3038); --tip-text: light-dark(#16191d, #ffffff);
+}
+:root[data-theme="light"] { color-scheme: light; } /* set by the theme button; absent means the OS decides */
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-a { color: #7db4ff; }
+a { color: var(--link); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
-.crumb { color: var(--muted); margin: 0 0 12px; }
+.crumb { color: var(--muted); margin: 0 0 12px; display: flex; align-items: center; gap: 6px; }
+.theme { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; } /* the icon is the label; its name is in aria-label */
 .crumb select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
 .head { margin: 0 0 14px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; min-width: 0; }
@@ -30,7 +43,7 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
 .sw.line { width: 14px; height: 0; border-top: 2px solid var(--accent); border-radius: 0; }
 .sw.marker { width: 0; height: 12px; border-left: 2px dashed var(--marker); border-radius: 0; }
-.sw.hatch { width: 14px; height: 12px; background: repeating-linear-gradient(135deg, #6b727c 0 1px, transparent 1px 4px); border: 1px solid #3a3f47; }
+.sw.hatch { width: 14px; height: 12px; background: repeating-linear-gradient(135deg, light-dark(#9aa0a8, #6b727c) 0 1px, transparent 1px 4px); border: 1px solid light-dark(#c9cdd3, #3a3f47); }
 .chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .chart-wrap { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); margin-top: 4px; }
 .chips { margin: 14px 0 0; }
@@ -50,7 +63,9 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .ev { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .ev .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .ev .ref { flex: none; font-size: 12px; font-family: ui-monospace, monospace; }
-.tag { flex: none; display: inline-block; min-width: 64px; text-align: center; padding: 1px 8px; border-radius: 999px; font-size: 12px; color: #0d0f12; }
+.tag { flex: none; display: inline-block; min-width: 64px; text-align: center; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+  /* --c is the bucket colour. Dark: solid fill, dark text. Light: a tint of it with its text darkened (>= 5.9:1). */
+  background: light-dark(color-mix(in srgb, var(--c) 16%, var(--panel)), var(--c)); color: light-dark(color-mix(in oklab, var(--c) 70%, #000), #0d0f12); }
 .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 
 /* In-page moves (opening the list, note links) scroll smoothly and the list eases in, unless the user asked for less motion. */
@@ -65,7 +80,7 @@ sup.fn a { color: var(--accent); text-decoration: none; }
   .panel, .kpi { padding: 14px 12px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi .v { font-size: 22px; }
-  .crumb select { min-height: 44px; }
+  .crumb select, .theme { min-height: 44px; min-width: 44px; }
   .chip .date { display: none; }
   .chip { padding: 3px 8px; }
   .ev { flex-wrap: wrap; gap: 4px 8px; }

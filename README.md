@@ -135,7 +135,9 @@ tarball. `build.js` copies the site files into `docs/` and stamps each asset
 URL in the pages with its content hash (`app.js?v=…`), so a changed script or
 stylesheet loads with the page rather than after the Pages and browser caches
 expire. `annotations.json` holds the model-release markers, each with its
-announcement URL.
+announcement URL. Colours are `light-dark()` pairs in `app.css`, so the page
+follows the OS scheme; a button cycles auto, light and dark, and remembers a
+forced choice in `localStorage`.
 
 ## Design notes
 

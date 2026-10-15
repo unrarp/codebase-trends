@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{name}} · codebase-trends</title>
+<!-- A theme picked with the button (app.js) applies before the first paint; without one, the OS decides. -->
+<script>try { const t = localStorage.getItem('codebase-trends:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="stylesheet" href="../app.css">
 </head>
 <body data-project="{{id}}" data-basis="{{basis}}">
 <main class="wrap">
-  <p class="crumb">codebase-trends / <select id="switch" aria-label="Project"><option>{{name}}</option></select></p>
+  <p class="crumb">codebase-trends / <select id="switch" aria-label="Project"><option>{{name}}</option></select><button id="theme" class="btn theme" type="button"></button></p>
   <header class="head">
     <h1>{{name}}</h1>
     <p id="meta" class="meta"></p>
