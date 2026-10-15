@@ -128,8 +128,11 @@ with `npx playwright install chromium`.
 
 Hand-written browser JS (`src/site/app.js`, `app.css`) plus Chart.js
 **4.5.1** (MIT), vendored unmodified at `docs/vendor/chart.umd.js` from the npm
-tarball. `build.js` copies the site files into `docs/`. `annotations.json` holds
-the model-release markers, each with its announcement URL.
+tarball. `build.js` copies the site files into `docs/` and stamps each asset
+URL in the pages with its content hash (`app.js?v=…`), so a changed script or
+stylesheet loads with the page rather than after the Pages and browser caches
+expire. `annotations.json` holds the model-release markers, each with its
+announcement URL.
 
 ## Design notes
 

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { readJsonl } from './store.js';
 import { classifyByRule, CATEGORIES, FIXES } from './classify.js';
 
@@ -131,14 +132,20 @@ export function build({ root = REPO, out = join(root, 'docs'), now = new Date() 
     id: p.id, name: p.name, basis: p.basis, annotations: p.annotations ?? [], links: p.links ?? {},
   })));
   write(join(out, 'data', 'annotations.json'), rows(readJson(join(root, 'annotations.json'), [])));
-  write(join(out, 'index.html'), readFileSync(join(SITE, 'index.html'), 'utf8'));
-  const page = readFileSync(join(SITE, 'page.html'), 'utf8');
+  for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
+  if (resolve(out) !== resolve(REPO, 'docs')) write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
+  // Pages caches assets for ten minutes and browsers longer, while the HTML is fetched fresh: an asset URL that
+  // carries its content hash makes a changed script or stylesheet load with the page instead of after the cache.
+  const hashes = new Map(['app.js', 'app.css', 'vendor/chart.umd.js'].filter((f) => existsSync(join(out, f)))
+    .map((f) => [f, createHash('sha256').update(readFileSync(join(out, f))).digest('hex').slice(0, 8)]));
+  const assets = new RegExp(`(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`, 'g');
+  const stamp = (html) => html.replace(assets, (m, attr, rel, f) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
+  write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8')));
+  const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'));
   for (const p of projects) {
     buildProject(p, root, out, generatedAt);
     write(join(out, p.id, 'index.html'), page.replace(/\{\{(\w+)\}\}/g, (m, k) => p[k] ?? m));
   }
-  for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
-  if (resolve(out) !== resolve(REPO, 'docs')) write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

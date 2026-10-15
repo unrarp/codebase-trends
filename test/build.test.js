@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, existsSync, readdirSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { build, eachDay, mondayOf } from '../src/build.js';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
@@ -141,4 +142,15 @@ test('commits basis: weekly rows carry the sorted add+del sizes of the fixes tha
   const aug = j('data/sparse/months/2026-08.json');
   assert.deepEqual(aug.find((e) => e.id === 'a1').stats, { add: 10, del: 5, files: 2 });
   assert.equal('stats' in aug.find((e) => e.id === 'c3'), false);
+});
+
+test('asset URLs carry a content hash, so a changed script or stylesheet is refetched with the page', () => {
+  const hash = (f) => createHash('sha256').update(readFileSync(join(out, f))).digest('hex').slice(0, 8);
+  const page = readFileSync(join(out, 'claude-code/index.html'), 'utf8');
+  assert.match(page, new RegExp(`href="\\.\\./app\\.css\\?v=${hash('app.css')}"`));
+  assert.match(page, new RegExp(`src="\\.\\./app\\.js\\?v=${hash('app.js')}"`));
+  assert.match(page, new RegExp(`src="\\.\\./vendor/chart\\.umd\\.js\\?v=${hash('vendor/chart.umd.js')}"`));
+  const root = readFileSync(join(out, 'index.html'), 'utf8');
+  assert.match(root, new RegExp(`href="\\./app\\.css\\?v=${hash('app.css')}"`));
+  assert.match(root, new RegExp(`src="\\./app\\.js\\?v=${hash('app.js')}"`));
 });
