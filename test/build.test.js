@@ -18,6 +18,8 @@ const buildFixture = () => {
 const out = buildFixture();
 const j = (rel) => JSON.parse(readFileSync(join(out, rel), 'utf8'));
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+/** Every key any of the objects carries, sorted: the stored shape is exactly what the site reads, nothing more. */
+const keys = (...objs) => [...new Set(objs.flat().flatMap((o) => Object.keys(o)))].sort();
 
 test('summary: totals, versions, bySource has rule, model and pending; undated version skipped', () => {
   const s = j('data/claude-code/summary.json');
@@ -29,8 +31,8 @@ test('summary: totals, versions, bySource has rule, model and pending; undated v
   assert.deepEqual(s.totals.bySource, { rule: 10, model: 6, pending: 1 });
   assert.equal(s.totals.byCategory.fixed, 7);
   assert.equal(sum(Object.values(s.totals.byCategory)), 17);
-  assert.equal('busiestDay' in s, false);
-  assert.equal('medianPerReleaseDay' in s, false);
+  assert.deepEqual(keys(s), ['basis', 'firstDate', 'generatedAt', 'lastDate', 'name', 'project', 'totals']);
+  assert.deepEqual(keys(s.totals), ['byCategory', 'bySource', 'events', 'versions']);
   const releases = j('data/claude-code/releases.json');
   assert.equal(releases.length, 11);
   assert.equal(releases.some((r) => r.version === '2.1.226'), false);
@@ -44,8 +46,7 @@ test('daily: every calendar day to today, totals add up, no derived ratios store
   assert.equal(d['2026-08-31'].total, 4);
   assert.deepEqual(d['2026-08-31'].counts, { added: 0, fixed: 4, changed: 0, improved: 0, removed: 0, other: 0 });
   assert.equal(d['2026-10-14'].total, 0); // zero row up to today
-  assert.ok(daily.every((r) => !('fixShare' in r) && !('botShare' in r))); // rows carry counts only
-  assert.ok(daily.every((r) => !('botShare' in r) && !('regressions' in r))); // rows carry only what the site reads
+  assert.deepEqual(keys(daily), ['counts', 'd', 'total']); // counts only: ratios are derived in the browser
 });
 
 test('weekly: every ISO week keyed by Monday, totals add up', () => {
@@ -56,6 +57,7 @@ test('weekly: every ISO week keyed by Monday, totals add up', () => {
   assert.ok(weekly.every((r) => mondayOf(r.d) === r.d));
   assert.equal(sum(weekly.map((r) => r.total)), 17);
   assert.equal(weekly.find((r) => r.d === '2026-08-31').total, 7); // Mon 08-31 (4) + 09-01 (2) + Sun 09-06 (1)
+  assert.deepEqual(keys(weekly), ['counts', 'd', 'total']); // changelog items have no size
 });
 
 test('sparse commits project: zero rows for gap days and weeks, UTC day shift', () => {
@@ -69,13 +71,12 @@ test('sparse commits project: zero rows for gap days and weeks, UTC day shift', 
   assert.equal(d['2026-08-04'].total, 2);
   assert.equal(d['2026-08-04'].counts.chore + d['2026-08-04'].counts.docs, 2); // maintenance only
   assert.equal(d['2026-08-21'].counts.revert, 1);
-  assert.ok(daily.concat(weekly).every((r) => !('botShare' in r)));
-  assert.ok(daily.every((r) => !('lines' in r))); // sizes are weekly only
+  assert.deepEqual(keys(daily), ['counts', 'd', 'total']); // sizes are weekly only
+  assert.deepEqual(keys(weekly), ['counts', 'd', 'lines', 'total']);
   assert.equal(weekly.find((r) => r.d === '2026-08-10').total, 0);
   const s = j('data/sparse/summary.json');
   assert.deepEqual(s.totals.bySource, { rule: 4, model: 1, pending: 1 }); // f6 by the feat: rule
-  assert.equal('versions' in s.totals, false);
-  assert.equal('bots' in s.totals, false);
+  assert.deepEqual(keys(s.totals), ['byCategory', 'bySource', 'events']); // no versions on the commits basis
   assert.equal(existsSync(join(out, 'data/sparse/releases.json')), false);
 });
 
@@ -90,13 +91,18 @@ test('month sharding: events land in their UTC month, ts-ordered, with derived f
   assert.equal(e.source, 'rule');
   assert.equal(e.url, 'https://github.com/anthropics/claude-code/releases/tag/v2.1.252');
   assert.equal('bot' in e, false);
+  // Bullets of one version share its ts: the sort is stable, so they keep the changelog's order.
+  assert.deepEqual(aug.filter((x) => x.version === '2.1.237').map((x) => x.id), ['2.1.237#0', '2.1.237#1']);
   const sep = j('data/claude-code/months/2026-09.json');
   assert.equal(sep.find((x) => x.id === '2.1.272#0').source, 'model');
   assert.equal(j('data/claude-code/months/2026-07.json').find((x) => x.version === '2.1.201').source, 'pending');
-  const c = j('data/sparse/months/2026-08.json').find((x) => x.id === 'b2');
+  const sparseAug = j('data/sparse/months/2026-08.json');
+  const c = sparseAug.find((x) => x.id === 'b2');
   assert.equal(c.ts, '2026-08-04T01:30:00.000Z');
-  assert.equal(c.bot, true);
+  assert.equal(c.bot, true); // author in project.bots
   assert.equal(c.url, 'https://example.test/commit/b2');
+  assert.equal(sparseAug.find((x) => x.id === 'd4').bot, true); // a co-author ending in [bot]
+  assert.equal(sparseAug.find((x) => x.id === 'a1').bot, false);
 });
 
 test('pages for every project in config, public projects.json, annotations passthrough', () => {
@@ -134,13 +140,12 @@ test('a rebuild drops month shards that no longer have events', () => {
 
 test('commits basis: weekly rows carry the sorted add+del sizes of the counted commits that have stats', () => {
   const w = Object.fromEntries(j('data/sparse/weekly.json').map((r) => [r.d, r]));
-  assert.deepEqual(w['2026-08-03'].lines, [15, 120]); // a1 fixed and f6 added, ascending; b2 chore and c3 docs are not counted
+  assert.deepEqual(w['2026-08-03'].lines, [15, 120]); // a1 fixed (120) lands before f6 added (15): sorted, not in ts order; b2 chore and c3 docs are not counted
   assert.deepEqual(w['2026-08-17'].lines, [40]); // d4 revert is counted (Removed)
   assert.deepEqual(w['2026-09-14'].lines, []); // e5 is pending → other, not counted
   assert.deepEqual(w['2026-08-10'].lines, []);
-  assert.ok(j('data/claude-code/weekly.json').every((r) => !('lines' in r))); // changelog items have no size
   const aug = j('data/sparse/months/2026-08.json');
-  assert.deepEqual(aug.find((e) => e.id === 'a1').stats, { add: 10, del: 5, files: 2 });
+  assert.deepEqual(aug.find((e) => e.id === 'a1').stats, { add: 100, del: 20, files: 4 });
   assert.equal('stats' in aug.find((e) => e.id === 'c3'), false);
 });
 
