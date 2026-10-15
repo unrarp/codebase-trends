@@ -59,6 +59,8 @@ async function projectPage() {
   const now = Date.now();
   const generatedAt = Date.parse(summary.generatedAt);
   const noun = changelog ? 'Changelog items' : 'Commits';
+  const refLabel = changelog ? 'Version' : 'Commit'; // what the drill-down's first column links to
+  $('drill-table').tHead.rows[0].cells[0].textContent = refLabel;
 
   // Weekly rows extended with empty rows up to the current week so the not-yet-collected span is on the axis.
   const rows = [...weeklyRaw];
@@ -79,7 +81,7 @@ async function projectPage() {
   const ref = kpiEnd >= 2 * ROLL ? rows.slice(kpiEnd - 2 * ROLL, kpiEnd - ROLL) : []; // the ROLL weeks right before
   const inWeeks = (ws) => releases.filter((r) => r.ts.slice(0, 10) >= ws[0].d && r.ts.slice(0, 10) <= weekEnd(ws.at(-1).d)).length;
   const perWeek = (f) => (ws) => (ws.length ? f(ws) / ws.length : null);
-  const NOTES = ['counted', 'window', 'fix', ...(changelog ? [] : ['lines']), 'markers']; // hidden notes are not numbered
+  const NOTES = ['counted', 'window', 'fix', ...(changelog ? [] : ['lines'])]; // hidden notes are not numbered
   const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
   $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
   const FIX = 'Fixes %';
@@ -100,17 +102,17 @@ async function projectPage() {
   $('kpis').replaceChildren(...kpis.map(({ k, f, show, share, noteCounted, note }) => {
     const a = last.length ? f(last) : null;
     const b = ref.length ? f(ref) : null;
-    const vs = a == null || b == null ? ['no prior period to compare'] : [el('b', { textContent: change(a, b, share) }), ` vs prior period (${show(b)})`];
+    const vs = a == null || b == null ? ['no prior period'] : [el('b', { textContent: change(a, b, share) }), ` vs prior period (${show(b)})`];
     return el('div', { className: 'kpi' }, el('div', { className: 'k' }, k, ...(noteCounted ? [fn('counted')] : []), fn('window'), ...(share ? [fn('fix')] : []), ...(note ? [fn(note)] : [])),
       el('div', { className: 'v', textContent: a == null ? '–' : show(a) }), el('div', { className: 'ref' }, ...vs));
   }));
   const aside = changelog ? 'items that announce rather than change something' : 'maintenance commits (chores, tests, docs, CI) and unreadable subjects';
-  $('fn-counted').textContent = `Counted ${noun.toLowerCase()} are those that added, fixed, changed (incl. improved) or removed something (incl. reverts). `
+  $('fn-counted').textContent = `Counted ${noun.toLowerCase()}: those that added, fixed, changed (incl. improved) or removed something (incl. reverts). `
     + `Not counted: ${setAside.toLocaleString('en-US')} ${aside}.`;
-  $('fn-window').textContent = `Tiles cover the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''}; the prior period is the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
-  $('fn-fix').textContent = `${FIX}: fixes as a share of changes, (fixed + reverts) ÷ all counted ${noun.toLowerCase()}. The chart line is its trailing ${ROLL}-week average, each week with the ${ROLL - 1} before it.`;
+  $('fn-window').textContent = `Tiles: the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''} vs the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
+  $('fn-fix').textContent = `${FIX}: (fixed + reverts) ÷ counted ${noun.toLowerCase()}. The chart line pools each week with the ${ROLL - 1} before it.`;
   $('fn-lines').hidden = changelog; // changelog items have no size
-  $('fn-lines').textContent = `${SIZE}: lines added + deleted by a commit, against its first parent; the median over the window's counted commits, so one sweeping commit does not move it. Commits with no recorded size are left out.`;
+  $('fn-lines').textContent = `${SIZE}: median lines added + deleted per counted commit (vs its first parent), so one sweeping commit does not move it. Commits with no recorded size are left out.`;
 
   // ---- shared chart furniture: not-yet-collected hatch, model markers ----
   const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.date) + DAY > anchor;
@@ -172,8 +174,8 @@ async function projectPage() {
   // ---- fix share: rolling window over the preceding weeks, nothing past the current week ----
   const rolling = rows.map((_, i) => (curIdx >= 0 && i > curIdx ? null : pooledFix(rows.slice(Math.max(0, i - ROLL + 1), i + 1))));
   $('title').textContent = `${noun} per week`;
-  $('subtitle').replaceChildren(`${changelog ? 'Every changelog line item, counted in the week its version was published' : 'Commits on the default branch (first-parent), counted in the week they landed'}. `
-    + `The line is ${FIX}`, fn('fix'), ' on the right axis. Click a week to list its items.');
+  $('subtitle').replaceChildren(`${changelog ? 'Changelog items, by the week their version shipped' : 'First-parent commits on the default branch, by the week they landed'}. `
+    + `The line is ${FIX}`, fn('fix'), ` on the right axis. Click a week to list its ${noun.toLowerCase()}.`);
 
   // ---- one chart: stacked weekly bars by group, the rolling fix share drawn over them on a 0–100% axis ----
   // The second y-axis is the owner's call against the dataviz one-axis rule: a separate fix-share chart above the
@@ -239,9 +241,8 @@ async function projectPage() {
   $('legend').replaceChildren(
     ...groups.map((g) => el('span', {}, el('span', { className: 'sw', style: `background:${g.color}` }), cap(g.key))),
     el('span', {}, el('span', { className: 'sw line' }), el('span', {}, FIX, fn('fix'), ' (right axis)')),
-    ...(major.length ? [el('span', {}, el('span', { className: 'sw marker' }), el('span', {}, 'Major model release', fn('markers')))] : []),
+    ...(major.length ? [el('span', {}, el('span', { className: 'sw marker' }), 'Major model release')] : []),
     item('hatch', 'Not yet collected', { id: 'legend-hatch', hidden: true }));
-  $('fn-markers').hidden = !major.length; // the note explains markers that are on the chart
   chart.update(); // the hatch legend entry is decided inside the draw, which ran before the entry existed
   const link = (a, ...kids) => el('a', { className: 'chip', href: a.source, target: '_blank', rel: 'noopener', title: `${a.label} · ${fmt(a.date, true)} · ${a.source}`, style: 'text-decoration:none;color:inherit' }, ...kids);
   // Dates are hidden on narrow screens (the marker on the chart gives them) and always in the chip's title.
@@ -268,12 +269,12 @@ async function projectPage() {
       const ref = e.version ?? e.sha.slice(0, 7);
       const group = groupOf(e.category); // never null: the filter above kept only grouped events
       body.append(el('tr', { className: 'ev' },
-        el('td', { dataset: { label: changelog ? 'Version' : 'Commit' } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
+        el('td', { dataset: { label: refLabel } }, e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', textContent: ref }) : ref),
         el('td', { dataset: { label: 'Type' } }, el('span', { className: 'tag', style: `background:${group.color}`, textContent: e.category })), // stored label, bucket colour
         el('td', { dataset: { label: 'Source' }, textContent: e.source }, ...(e.bot ? [el('span', { className: 'badge', textContent: 'bot' })] : [])),
         el('td', { dataset: { label: 'Change' }, textContent: e.text })));
     }
-    $('drill-empty').textContent = `No counted ${what} in this period.`;
+    $('drill-empty').textContent = `No counted ${what}.`;
     $('drill-empty').hidden = events.length > 0;
     $('drill-table').hidden = events.length === 0;
     $('drill').hidden = false;

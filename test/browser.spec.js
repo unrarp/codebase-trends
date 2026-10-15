@@ -45,12 +45,11 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
     test.use({ viewport });
     const mobile = viewport.width < 720;
 
-    test('loads with no console errors, bars drawn, causation footnote', async ({ page }) => {
+    test('loads with no console errors, bars drawn', async ({ page }) => {
       const errors = await open(page, 'claude-code/');
       await expect(page.locator('#kpis .kpi')).toHaveCount(4);
       const bars = await page.evaluate(() => __chart.getDatasetMeta(0).data.length);
       expect(bars).toBeGreaterThan(0);
-      await expect(page.locator('#fn-markers')).toContainText('proximity does not establish causation');
       await expect(page.locator('#fn-window')).toContainText('Weeks start Monday 00:00 UTC');
       expect(errors).toEqual([]);
     });
@@ -68,6 +67,14 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await page.mouse.click(x, y);
       await expect(page.locator('#drill')).toBeVisible();
       expect(await page.locator('#drill tbody tr.ev').count()).toBeGreaterThan(0);
+      await expect(page.locator('#drill-table thead th').first()).toHaveText('Version'); // changelog basis
+    });
+
+    test('commits basis: the first drill-down column is the commit', async ({ page }) => {
+      await open(page, 'sparse/#2026-08-21');
+      await expect(page.locator('#drill')).toBeVisible();
+      await expect(page.locator('#drill-table thead th').first()).toHaveText('Commit');
+      await expect(page.locator('#drill tbody tr.ev td').first()).toHaveAttribute('data-label', 'Commit');
     });
 
     test('#YYYY-MM-DD opens the table on load, no horizontal overflow', async ({ page }) => {
