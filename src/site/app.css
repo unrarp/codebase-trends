@@ -64,8 +64,10 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .ev .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .ev .ref { flex: none; font-size: 12px; font-family: ui-monospace, monospace; }
 .tag { flex: none; display: inline-block; min-width: 64px; text-align: center; padding: 1px 8px; border-radius: 999px; font-size: 12px;
-  /* --c is the bucket colour. Dark: solid fill, dark text. Light: a tint of it with its text darkened (>= 5.9:1). */
-  background: light-dark(color-mix(in srgb, var(--c) 16%, var(--panel)), var(--c)); color: light-dark(color-mix(in oklab, var(--c) 70%, #000), #0d0f12); }
+  /* --c is the bucket colour: a tint of it on the panel, its text darkened (light) or lightened (dark), >= 4.5:1 as the
+     browser test pins. No single text colour reads on all four solid fills. */
+  background: light-dark(color-mix(in srgb, var(--c) 16%, var(--panel)), color-mix(in srgb, var(--c) 20%, var(--panel)));
+  color: light-dark(color-mix(in oklab, var(--c) 70%, #000), color-mix(in oklab, var(--c) 60%, #fff)); }
 .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 
 /* In-page moves (opening the list, note links) scroll smoothly and the list eases in, unless the user asked for less motion. */

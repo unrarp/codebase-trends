@@ -414,23 +414,25 @@ test('a stored theme applies before app.js runs, so the page never flashes the o
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(13, 15, 18)');
 });
 
-test('category tags in the week list keep their text readable (4.5:1) in light mode', async ({ browser }) => {
-  const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
-  const ratios = {};
-  for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) { // between them, one tag per bucket
-    await open(page, path);
-    await expect(page.locator('#drill li.ev .tag').first()).toBeVisible();
-    Object.assign(ratios, await page.evaluate(() => {
-      // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
-      const rgb = (c) => { const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3); };
-      const lum = (c) => rgb(c).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
-      return Object.fromEntries([...document.querySelectorAll('#drill .tag')].map((t) => {
-        const s = getComputedStyle(t);
-        const [a, b] = [lum(s.backgroundColor), lum(s.color)].sort((x, y) => y - x);
-        return [t.textContent, Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100];
+test('category tags in the week list keep their text readable (4.5:1) in both schemes', async ({ browser }) => {
+  for (const colorScheme of ['light', 'dark']) {
+    const page = await (await browser.newContext({ colorScheme })).newPage();
+    const ratios = {};
+    for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) { // between them, one tag per bucket
+      await open(page, path);
+      await expect(page.locator('#drill li.ev .tag').first()).toBeVisible();
+      Object.assign(ratios, await page.evaluate(() => {
+        // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
+        const rgb = (c) => { const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+        const lum = (c) => rgb(c).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+        return Object.fromEntries([...document.querySelectorAll('#drill .tag')].map((t) => {
+          const s = getComputedStyle(t);
+          const [a, b] = [lum(s.backgroundColor), lum(s.color)].sort((x, y) => y - x);
+          return [t.textContent, Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100];
+        }));
       }));
-    }));
+    }
+    expect(Object.keys(ratios).sort()).toEqual(['added', 'changed', 'fixed', 'revert']);
+    for (const [tag, ratio] of Object.entries(ratios)) expect(ratio, `${colorScheme} ${tag}`).toBeGreaterThanOrEqual(4.5);
   }
-  expect(Object.keys(ratios).sort()).toEqual(['added', 'changed', 'fixed', 'revert']);
-  for (const [tag, ratio] of Object.entries(ratios)) expect(ratio, tag).toBeGreaterThanOrEqual(4.5);
 });
