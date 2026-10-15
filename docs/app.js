@@ -83,7 +83,7 @@ async function projectPage() {
   const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
   $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
   const FIX = 'Fixes %';
-  const LINES = 'Lines per fix';
+  const SIZE = 'Commit size';
   const sign = (x) => (x > 0 ? '+' : x < 0 ? '−' : '±');
   const change = (a, b, share) => { // rounded first, so a change that rounds to 0 reads ±0
     if (!share && b === 0) return '–';
@@ -95,7 +95,7 @@ async function projectPage() {
     { k: 'New features / week', f: perWeek((ws) => sum(ws, (r) => r.counts.added ?? 0)), show: (v) => v.toFixed(0) },
     { k: FIX, f: pooledFix, show: pct, share: true },
     ...(changelog ? [{ k: 'Versions released / week', f: perWeek(inWeeks), show: (v) => v.toFixed(1) }]
-      : [{ k: `${LINES} (median)`, f: (ws) => median(ws.flatMap((r) => r.lines?.fixed ?? [])), show: (v) => v.toFixed(0), note: 'lines' }]),
+      : [{ k: SIZE, f: (ws) => median(ws.flatMap((r) => r.lines ?? [])), show: (v) => v.toFixed(0), note: 'lines' }]),
   ];
   $('kpis').replaceChildren(...kpis.map(({ k, f, show, share, noteCounted, note }) => {
     const a = last.length ? f(last) : null;
@@ -110,7 +110,7 @@ async function projectPage() {
   $('fn-window').textContent = `Tiles cover the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''}; the prior period is the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
   $('fn-fix').textContent = `${FIX}: fixes as a share of changes, (fixed + reverts) ÷ all counted ${noun.toLowerCase()}. The chart line is its trailing ${ROLL}-week average, each week with the ${ROLL - 1} before it.`;
   $('fn-lines').hidden = changelog; // changelog items have no size
-  $('fn-lines').textContent = `${LINES}: lines added + deleted by a fixed commit (incl. reverts), against its first parent; the median over the window's fixes, so one sweeping commit does not move it. Commits with no recorded size are left out.`;
+  $('fn-lines').textContent = `${SIZE}: lines added + deleted by a commit, against its first parent; the median over the window's counted commits, so one sweeping commit does not move it. Commits with no recorded size are left out.`;
 
   // ---- shared chart furniture: context periods, not-yet-collected hatch, model markers ----
   const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.end ?? a.date) + DAY > anchor;

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { readJsonl } from './store.js';
-import { classifyByRule, CATEGORIES, FIXES } from './classify.js';
+import { classifyByRule, CATEGORIES, COUNTED } from './classify.js';
 
 /*
  * Output under docs/data/ (validate.js checks the invariants):
@@ -12,9 +12,9 @@ import { classifyByRule, CATEGORIES, FIXES } from './classify.js';
  *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
  *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions? } }   versions: changelog
  *   <project>/daily.json     [{ d, counts, total }]  every calendar day firstDate..lastDate
- *   <project>/weekly.json    same rows, d = ISO-week Monday, every week; commits basis adds lines: { fixed } — add+del
- *                            of each FIXES commit that has stats, as a list (ascending, canonical) rather than a median,
- *                            so the browser can pool weeks into any window and take an exact median
+ *   <project>/weekly.json    same rows, d = ISO-week Monday, every week; commits basis adds lines: add+del of each
+ *                            COUNTED commit that has stats, as a list (ascending, canonical) rather than a median, so
+ *                            the browser can pool weeks into any window and take an exact median
  *   <project>/releases.json  [{ version, ts, count }]                    changelog basis only
  *   <project>/months/YYYY-MM.json  [{ id, ts, version?, sha?, category, source, text, tags, author?, bot?, stats?, url? }]
  * Ratios such as the site's Fixes % are derived in the browser from counts, never stored.
@@ -80,14 +80,14 @@ function deriveEvents(project, root) {
 
 function aggregate(events, project, keyOf, keys, { lines = false } = {}) {
   const cats = CATEGORIES[project.basis];
-  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: { fixed: [] } } : {}) }]));
+  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: [] } : {}) }]));
   for (const e of events) {
     const r = by.get(keyOf(e.ts.slice(0, 10)));
     r.counts[e.category]++;
     r.total++;
-    if (lines && e.stats && FIXES.includes(e.category)) r.lines.fixed.push(e.stats.add + e.stats.del);
+    if (lines && e.stats && COUNTED.includes(e.category)) r.lines.push(e.stats.add + e.stats.del);
   }
-  if (lines) for (const r of by.values()) r.lines.fixed.sort((a, b) => a - b);
+  if (lines) for (const r of by.values()) r.lines.sort((a, b) => a - b);
   return [...by.values()];
 }
 

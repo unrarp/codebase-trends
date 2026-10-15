@@ -51,5 +51,3 @@ export const CATEGORIES = {
 /** Product changes — the categories the site counts and draws; the rest (other, chore, test, docs, ci) is set aside.
  *  Must match GROUPS in src/site/app.js (test/classify.test.js pins the two together). */
 export const COUNTED = ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'];
-/** The fixes within COUNTED: the Fixes % numerator and the "lines per fix" population. */
-export const FIXES = ['fixed', 'revert'];

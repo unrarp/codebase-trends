@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES, FIXES } from './classify.js';
+import { CATEGORIES, COUNTED } from './classify.js';
 import { eachDay, mondayOf } from './build.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,8 +52,8 @@ export function validate(out) {
         if (Object.keys(r.counts).some((c) => !cats.includes(c))) bad(w, 'category outside basis set');
         if (name === 'weekly' && p.basis === 'commits') {
           const sorted = (xs) => Array.isArray(xs) && xs.every((x, i) => Number.isInteger(x) && x >= 0 && (i === 0 || xs[i - 1] <= x));
-          if (!r.lines || !sorted(r.lines.fixed) || Object.keys(r.lines).join() !== 'fixed') bad(w, 'lines must be { fixed: ascending non-negative integers }');
-          else if (r.lines.fixed.length > sum(FIXES.map((c) => r.counts[c] ?? 0))) bad(w, 'lines.fixed has more sizes than the row has fixes');
+          if (!sorted(r.lines)) bad(w, 'lines must be ascending non-negative integers');
+          else if (r.lines.length > sum(COUNTED.map((c) => r.counts[c] ?? 0))) bad(w, 'lines has more sizes than the row has counted commits');
         } else if ('lines' in r) bad(w, 'lines only on weekly rows of the commits basis');
       }
       if (sum(rows.map((r) => r.total)) !== totals.events) bad(f, `Σ total ${sum(rows.map((r) => r.total))} != summary.totals.events ${totals.events}`);

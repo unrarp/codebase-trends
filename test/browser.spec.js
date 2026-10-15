@@ -102,10 +102,10 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(m[0].y).not.toBeNull(); // badges are drawn in both viewports
     });
 
-    test('sparse commits project shows four KPI tiles, the last one lines per fix with its own note', async ({ page }) => {
+    test('sparse commits project shows four KPI tiles, the last one commit size with its own note', async ({ page }) => {
       await open(page, 'sparse/');
       await expect(page.locator('#kpis .kpi')).toHaveCount(4);
-      await expect(page.locator('#kpis .kpi').last().locator('.k')).toContainText('Lines per fix (median)');
+      await expect(page.locator('#kpis .kpi').last().locator('.k')).toContainText('Commit size');
       await expect(page.locator('#fn-lines')).toBeVisible();
       await expect(page.locator('#fn-lines')).toContainText('added + deleted');
       await open(page, 'claude-code/');
@@ -273,12 +273,12 @@ test('resizing across the breakpoint moves the count axis and scrolls to the lat
   expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
 });
 
-test('lines per fix is the median over the window\'s sizes, compared with the prior window', async ({ page }) => {
+test('commit size is the median over the window\'s sizes, compared with the prior window', async ({ page }) => {
   await page.route('**/data/sparse/weekly.json', async (route) => {
     const rows = JSON.parse(readFileSync(join(out, 'data/sparse/weekly.json'), 'utf8'));
     for (const r of rows) {
-      if (r.d === '2026-09-28') r.lines = { fixed: [10, 30] };
-      if (r.d === '2026-10-05') r.lines = { fixed: [20] };
+      if (r.d === '2026-09-28') r.lines = [10, 30];
+      if (r.d === '2026-10-05') r.lines = [20];
     }
     await route.fulfill({ json: rows });
   });

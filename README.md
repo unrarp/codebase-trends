@@ -20,10 +20,10 @@ so projects compare on one footing:
 
 1. **KPI tiles**: items per week, new features (`added`) per week, fixes as a
    percentage of changes ("Fixes %"), and either versions released per week
-   (changelog basis) or the median lines per fix (commits basis: lines added +
-   deleted by each `fixed` or `revert` commit, so a growing number means fixes
-   are getting bigger), over the last 4 complete weeks, each with its signed
-   change vs the 4 weeks before underneath.
+   (changelog basis) or the median commit size (commits basis: lines added +
+   deleted per counted commit, as GitHub reports a diff, so a growing number
+   means changes are getting bigger), over the last 4 complete weeks, each
+   with its signed change vs the 4 weeks before underneath.
    Numbered notes under the chart define what is counted, the windows and
    the formula; the header, tiles and legend link to them.
 2. **One chart**: counted items per week by bucket as stacked bars, with the
