@@ -223,19 +223,43 @@ async function projectPage() {
   // The second y-axis is the owner's call against the dataviz one-axis rule: a separate fix-share chart above the
   // bars with a synced crosshair was built and rejected as harder to read together. Keep the overlay; the halo
   // dataset keeps the line legible over tall bars.
-  // Narrow screens get a fixed width per week inside a sideways-scrolling wrapper, opened at the latest week,
-  // with the axes on the right so they stay in view there. `layout` re-applies this whenever the viewport changes.
+  // Narrow screens get a fixed width per week inside a sideways-scrolling wrapper, opened at the latest week.
+  // `layout` re-applies this whenever the viewport changes.
   const scroll = $('chart').closest('.chart-scroll');
   const wrap = $('chart').parentElement;
   const layout = (ch) => {
     const small = narrow();
     wrap.style.width = small ? `${Math.max(scroll.clientWidth, rows.length * PX_PER_WEEK)}px` : '';
     if (ch) {
-      ch.options.scales.y.position = small ? 'right' : 'left';
       ch.options.scales.x.ticks.maxTicksLimit = small ? 8 : 10;
       ch.update();
     }
     if (small) scroll.scrollLeft = scroll.scrollWidth;
+  };
+  // While the chart scrolls, each axis stays in view as a copy of its strip of the chart canvas, repainted on every
+  // draw, in a canvas pinned over that edge of the scroller. The panel fill hides the bars scrolling underneath.
+  // Copied before the markers and tooltip are drawn, and only down to where the date labels start (under the x-axis
+  // tick space), so no fragment of them stays pinned over other weeks.
+  const [pinL, pinR] = ['left', 'right'].map((side) => document.querySelector(`.axis-pin.${side}`));
+  const pins = {
+    id: 'pins',
+    afterDatasetsDraw(chart) {
+      const { canvas, chartArea: a, currentDevicePixelRatio: dpr, scales: { x } } = chart;
+      const fill = css('panel');
+      const cut = Math.round((x.top + x.options.grid.tickLength) * dpr);
+      for (const [p, x0, x1] of [[pinL, 0, a.left], [pinR, a.right, chart.width]]) {
+        p.hidden = scroll.scrollWidth <= scroll.clientWidth;
+        if (p.hidden) continue;
+        const [sx, sw, sh] = [Math.round(x0 * dpr), Math.round((x1 - x0) * dpr), canvas.height];
+        if (p.width !== sw || p.height !== sh) { // resizing clears the bitmap, so only when the axis size changed
+          Object.assign(p, { width: sw, height: sh });
+          Object.assign(p.style, { width: `${sw / dpr}px`, height: `${sh / dpr}px` });
+        }
+        const g = p.getContext('2d');
+        g.fillStyle = fill; g.fillRect(0, 0, sw, sh);
+        g.drawImage(canvas, sx, 0, sw, cut, 0, 0, sw, cut);
+      }
+    },
   };
   layout();
   const fade = (hex) => (c) => (c.dataIndex === curIdx ? `${hex}73` : hex);
@@ -275,12 +299,12 @@ async function projectPage() {
         },
       },
       scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow() ? 8 : 10, callback(v) { return fmt(this.getLabelForValue(v)); } } },
-        y: { stacked: true, beginAtZero: true, position: narrow() ? 'right' : 'left', grid: { color: () => css('grid') }, ticks: { maxTicksLimit: 6 } }, // layout() keeps these in step
+        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: narrow() ? 8 : 10, callback(v) { return fmt(this.getLabelForValue(v)); } } }, // layout() keeps this in step
+        y: { stacked: true, beginAtZero: true, grid: { color: () => css('grid') }, ticks: { maxTicksLimit: 6 } },
         y1: { position: 'right', min: 0, max: 1, grid: { drawOnChartArea: false }, ticks: { stepSize: 0.25, callback: (v) => pct(v), color: () => css('accent') } },
       },
     },
-    plugins: [furniture],
+    plugins: [furniture, pins],
   });
   window.__chart = chart; // test hook read by test/browser.spec.js
 

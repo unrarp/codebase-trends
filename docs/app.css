@@ -44,7 +44,11 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .sw.line { width: 14px; height: 0; border-top: 2px solid var(--accent); border-radius: 0; }
 .sw.marker { width: 0; height: 12px; border-left: 2px dashed var(--marker); border-radius: 0; }
 .sw.hatch { width: 14px; height: 12px; background: repeating-linear-gradient(135deg, light-dark(#9aa0a8, #6b727c) 0 1px, transparent 1px 4px); border: 1px solid light-dark(#c9cdd3, #3a3f47); }
+.chart-frame { position: relative; }
 .chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.axis-pin { position: absolute; top: 4px; pointer-events: none; } /* top: the chart-wrap margin; touches fall through to the chart, so a swipe on an axis scrolls it */
+.axis-pin.left { left: 0; }
+.axis-pin.right { right: 0; }
 .chart-wrap { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); margin-top: 4px; }
 .chips { margin: 14px 0 0; }
 .notes { color: var(--muted); font-size: 12px; margin: 14px 0 0; padding-left: 18px; }

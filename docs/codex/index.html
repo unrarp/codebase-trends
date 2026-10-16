@@ -6,7 +6,7 @@
 <title>Codex · codebase-trends</title>
 <!-- A theme picked with the button (app.js) applies before the first paint; without one, the OS decides. -->
 <script>try { const t = localStorage.getItem('codebase-trends:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
-<link rel="stylesheet" href="../app.css?v=99233277">
+<link rel="stylesheet" href="../app.css?v=48683601">
 </head>
 <body data-project="codex" data-basis="commits">
 <main class="wrap">
@@ -22,7 +22,10 @@
     <h2 id="title"></h2>
     <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
-    <div class="chart-scroll"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
+    <div class="chart-frame">
+      <div class="chart-scroll"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
+      <canvas class="axis-pin left" aria-hidden="true" hidden></canvas><canvas class="axis-pin right" aria-hidden="true" hidden></canvas>
+    </div>
     <div id="chips" class="chips"></div>
     <ol class="notes">
       <li id="fn-counted"></li>
@@ -41,6 +44,6 @@
   </section>
 </main>
 <script src="../vendor/chart.umd.js?v=ecc3cd1e"></script>
-<script src="../app.js?v=d305780a" defer></script>
+<script src="../app.js?v=3c9a0329" defer></script>
 </body>
 </html>

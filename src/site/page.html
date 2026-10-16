@@ -22,7 +22,10 @@
     <h2 id="title"></h2>
     <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
-    <div class="chart-scroll"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
+    <div class="chart-frame">
+      <div class="chart-scroll"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
+      <canvas class="axis-pin left" aria-hidden="true" hidden></canvas><canvas class="axis-pin right" aria-hidden="true" hidden></canvas>
+    </div>
     <div id="chips" class="chips"></div>
     <ol class="notes">
       <li id="fn-counted"></li>

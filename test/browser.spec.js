@@ -46,6 +46,54 @@ const slot = (page) => page.evaluate(() => { const s = __chart.scales.x; return 
 // Chart.js handles canvas events once per animation frame, so two synthetic clicks in one frame collapse into the last.
 const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
+// The fixture spans too few weeks to overflow 375px at 12px a week, so pad 40 empty weeks before it.
+const padWeeks = async (route) => {
+  const res = await route.fetch();
+  const w = await res.json();
+  const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
+  await route.fulfill({ response: res, json: [...pad, ...w] });
+};
+// Each pin sits on its edge of the scroller, as wide as its axis, and shows the axis the chart drew there: tick labels
+// (a colour off the panel) and the same pixels as that strip of the chart canvas, wherever the scroller is. Below the
+// y-axis it shows only panel: the first date label spills into the left strip and must not stay pinned. Touches on a
+// pin fall through to the chart, so a swipe that starts on an axis still scrolls it.
+async function expectPinned(page) {
+  const pins = await page.evaluate(() => {
+    const s = document.querySelector('.chart-scroll').getBoundingClientRect();
+    const c = __chart.canvas;
+    const dpr = __chart.currentDevicePixelRatio;
+    const a = __chart.chartArea;
+    const cut = Math.round((__chart.scales.x.top + __chart.scales.x.options.grid.tickLength) * dpr) * 4; // in bytes per column
+    const strip = (x0, x1) => c.getContext('2d').getImageData(Math.round(x0 * dpr), 0, Math.round((x1 - x0) * dpr), c.height).data;
+    return [['left', 0, a.left], ['right', a.right, __chart.width]].map(([side, x0, x1]) => {
+      const p = document.querySelector(`.axis-pin.${side}`);
+      const r = p.getBoundingClientRect();
+      const ink = strip(x0, x1);
+      const own = p.getContext('2d').getImageData(0, 0, p.width, p.height).data;
+      const below = cut * p.width; // bytes before the first row under the y-axis
+      let inked = 0;
+      let differ = 0;
+      const under = new Set();
+      for (let i = 3; i < ink.length; i += 4) {
+        if (i > below) { under.add(own.slice(i - 3, i + 1).join()); continue; }
+        if (ink[i] > 0) inked++;
+        if (ink[i] === 255 && (ink[i - 3] !== own[i - 3] || ink[i - 2] !== own[i - 2] || ink[i - 1] !== own[i - 1])) differ++; // opaque chart pixels copy over exactly
+      }
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { side, through: hit === c, x: r.left - s.left, right: s.right - r.right, w: r.width, axisW: x1 - x0, inked, differ, under: under.size, sizes: own.length === ink.length };
+    });
+  });
+  for (const p of pins) {
+    expect(p.sizes, p.side).toBe(true);
+    expect(Math.abs(p.w - p.axisW), p.side).toBeLessThanOrEqual(1);
+    expect(Math.abs(p.side === 'left' ? p.x : p.right), p.side).toBeLessThanOrEqual(1);
+    expect(p.inked, p.side).toBeGreaterThan(0);
+    expect(p.differ, p.side).toBe(0);
+    expect(p.under, p.side).toBe(1); // one colour: the panel
+    expect(p.through, p.side).toBe(true);
+  }
+}
+
 for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 }], ['mobile 375x812', { width: 375, height: 812 }]]) {
   test.describe(name, () => {
     test.use({ viewport });
@@ -172,20 +220,17 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       want.forEach((w, i) => (w === null ? expect(fix.v[i]).toBeNull() : expect(fix.v[i]).toBeCloseTo(w, 10)));
     });
 
-    test('narrow screens scroll the chart to the latest week with the count axis on the right', async ({ page }) => {
+    test('narrow screens scroll the chart to the latest week with both axes pinned in view', async ({ page }) => {
       test.skip(!mobile, 'mobile only');
-      // the fixture spans too few weeks to overflow 375px at 12px a week, so pad 40 empty weeks before it
-      await page.route('**/data/claude-code/weekly.json', async (route) => {
-        const res = await route.fetch();
-        const w = await res.json();
-        const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
-        await route.fulfill({ response: res, json: [...pad, ...w] });
-      });
+      await page.route('**/data/claude-code/weekly.json', padWeeks);
       await open(page, 'claude-code/');
       const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft, pos: __chart.scales.y.position }; });
       expect(m.sw).toBeGreaterThan(m.cw);
       expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
-      expect(m.pos).toBe('right');
+      expect(m.pos).toBe('left');
+      await expectPinned(page);
+      await page.evaluate(() => { document.querySelector('.chart-scroll').scrollLeft = 0; });
+      await expectPinned(page);
     });
 
     test('wide screens fit the chart to the page with the count axis on the left', async ({ page }) => {
@@ -193,6 +238,8 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await open(page, 'claude-code/');
       expect(await page.evaluate(() => document.querySelector('.chart-wrap').style.width)).toBe('');
       expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
+      await expect(page.locator('.axis-pin')).toHaveCount(2);
+      for (const pin of await page.locator('.axis-pin').all()) await expect(pin).toBeHidden();
     });
 
     test('root opens the first project, then the last one viewed', async ({ page }) => {
@@ -341,21 +388,19 @@ test('fewer than four complete weeks: the note names the shorter window', async 
   await expect(page.locator('#fn-window')).not.toContainText('4 complete weeks');
 });
 
-test('resizing across the breakpoint moves the count axis and scrolls to the latest week', async ({ page }) => {
+test('resizing across the breakpoint pins the axes and scrolls to the latest week, and back', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.route('**/data/claude-code/weekly.json', async (route) => {
-    const res = await route.fetch();
-    const w = await res.json();
-    const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
-    await route.fulfill({ response: res, json: [...pad, ...w] });
-  });
+  await page.route('**/data/claude-code/weekly.json', padWeeks);
   await open(page, 'claude-code/');
-  expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
+  await expect(page.locator('.axis-pin.left')).toBeHidden();
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.waitForFunction(() => __chart.scales.y.position === 'right');
+  await expect(page.locator('.axis-pin.left')).toBeVisible();
   const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft }; });
   expect(m.sw).toBeGreaterThan(m.cw);
   expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
+  await expectPinned(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const pin of await page.locator('.axis-pin').all()) await expect(pin).toBeHidden();
 });
 
 test('commit size is the median over the window\'s sizes, compared with the prior window', async ({ page }) => {
