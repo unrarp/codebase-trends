@@ -25,8 +25,10 @@ Every project page has the same layout, so projects compare on one footing.
   last changed is hatched "Not yet collected".
 - **Drill-down**: click a week (tap twice on touch screens) to list its items;
   `#YYYY-MM-DD` deep-links a day.
-- **Numbered notes** under the chart define every term, window and formula;
-  tiles and legend link to them.
+- **Three layers of explanation**: one question under the title; every
+  metric label shows its definition as a hover gloss; and an (i) button, every
+  label and `#fn-<term>` deep links open a "How to read this page" dialog with
+  the definitions and where the data comes from.
 
 Each item is counted in the UTC week it shipped and gets one category:
 `added`, `fixed`, `changed`, `improved`, `removed` or `other`, plus `revert`,

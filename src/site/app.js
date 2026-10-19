@@ -23,6 +23,7 @@ const $ = (id) => document.getElementById(id);
 const ink = Object.assign(document.createElement('i'), { hidden: true });
 const css = (name) => { ink.style.color = `var(--${name})`; return getComputedStyle(ink).color; };
 const el = (tag, { dataset, ...props } = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); Object.assign(n.dataset, dataset); n.append(...kids); return n; };
+const ext = (href, text, className) => el('a', { className, href, target: '_blank', rel: 'noopener', textContent: text });
 const get = (path) => fetch(path).then((r) => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); });
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
 const mondayOf = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY); };
@@ -78,7 +79,8 @@ async function projectPage() {
     get(`${D}projects.json`), get(`${D}annotations.json`), get(`${D}${id}/summary.json`),
     get(`${D}${id}/daily.json`), get(`${D}${id}/weekly.json`), changelog ? get(`${D}${id}/releases.json`) : [],
   ]);
-  const vendors = projects.find((p) => p.id === id).annotations;
+  const project = projects.find((p) => p.id === id);
+  const vendors = project.annotations;
   remember(LAST, id);
   document.body.append(ink);
   $('switch').replaceChildren(...projects.map((p) => el('option', { value: p.id, textContent: p.name, selected: p.id === id })));
@@ -106,38 +108,74 @@ async function projectPage() {
   const ref = kpiEnd >= 2 * ROLL ? rows.slice(kpiEnd - 2 * ROLL, kpiEnd - ROLL) : []; // the ROLL weeks right before
   const inWeeks = (ws) => releases.filter((r) => r.ts.slice(0, 10) >= ws[0].d && r.ts.slice(0, 10) <= weekEnd(ws.at(-1).d)).length;
   const perWeek = (f) => (ws) => (ws.length ? f(ws) / ws.length : null);
-  const NOTES = ['counted', 'window', 'fix', ...(changelog ? [] : ['lines'])]; // hidden notes are not numbered
-  const fn = (id) => el('sup', { className: 'fn' }, el('a', { href: `#fn-${id}`, textContent: String(NOTES.indexOf(id) + 1), title: `See note ${NOTES.indexOf(id) + 1}` }));
-  $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', ...(recent(dayOf(generatedAt)) ? {} : { year: 'numeric' }), hour: 'numeric', minute: '2-digit' })} · ${counted.toLocaleString('en-US')} ${noun.toLowerCase()}`, fn('counted'));
+  const what = noun.toLowerCase();
   const FIX = 'Fixes %';
   const SIZE = 'Commit size';
+  // ---- three layers of explanation: one question on the page; a definition as the hover gloss of every label that uses
+  // it; and the help panel at the foot, listing the definitions and the data's provenance, opened by any jump into it ----
+  $('lede').textContent = `How much of ${summary.name}'s work each week is new capability, and how much is correction?`;
+  const aside = changelog ? 'items that announce rather than change something' : 'maintenance commits (chores, tests, docs, CI) and unreadable subjects';
+  const one = changelog ? 'A changelog item' : 'A commit';
+  const DEFS = { // id → [name, definition]; each is the gloss of its term links and one entry of the help dialog
+    counted: [noun, `${one} counts when it added, fixed, changed (including improved) or removed something (including reverts). `
+      + `Not counted: ${setAside.toLocaleString('en-US')} ${aside}.`],
+    added: ['New features / week', `${noun} that added something, per week.`],
+    fix: [FIX, `(fixed + reverts) ÷ ${what}. On the chart, each week is pooled with the ${ROLL - 1} before it, so one quiet week does not swing the line.`],
+    ...(changelog ? { versions: ['Versions released / week', 'npm releases of the package, per week.'] }
+      : { lines: [SIZE, 'Median lines added + deleted per commit, against its first parent. A median ignores one sweeping commit. Commits with no recorded size are left out.'] }),
+    window: ['Window and prior period', `Each tile covers the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''}; `
+      + `the line under it compares with the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`],
+  };
+  const term = (id, text) => el('a', { className: 'term', href: `#fn-${id}`, title: `${DEFS[id][0]}: ${DEFS[id][1]}`, textContent: text });
+  $('defs').replaceChildren(...Object.entries(DEFS).map(([id, [name, text]]) => el('div', { id: `fn-${id}` }, el('dt', { textContent: name }), el('dd', { textContent: text }))));
+  const help = $('help');
+  const openHelp = (id) => { // at the entry `id`, marked and scrolled to; without one, from the top
+    if (!help.open) help.showModal();
+    for (const d of $('defs').children) d.classList.toggle('current', d.id === `fn-${id}`);
+    if (id) $(`fn-${id}`).scrollIntoView({ block: 'center' }); else help.scrollTop = 0;
+  };
+  // A term link opens the dialog itself rather than jumping to its hash, so a day deep link (#YYYY-MM-DD) in the URL survives.
+  document.addEventListener('click', (e) => { const a = e.target.closest('a.term'); if (a) { e.preventDefault(); openHelp(a.hash.slice(4)); } });
+  $('info').addEventListener('click', () => openHelp());
+  $('help-close').addEventListener('click', () => help.close());
+  help.addEventListener('click', (e) => { if (e.target === help) help.close(); }); // the backdrop; the body fills the dialog, so only it is the target there
+  help.addEventListener('close', () => { if (/^#fn-/.test(location.hash)) history.replaceState(null, '', location.pathname); }); // a shared #fn-… link, once read, should not reopen on reload
+  const fromHelpHash = () => { const m = /^#fn-(\w+)$/.exec(location.hash); if (m && DEFS[m[1]]) openHelp(m[1]); };
+  fromHelpHash(); // a shared #fn-… link: the entries exist only now
+  addEventListener('hashchange', fromHelpHash);
+  $('meta').replaceChildren(`updated ${new Date(generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', ...(recent(dayOf(generatedAt)) ? {} : { year: 'numeric' }), hour: 'numeric', minute: '2-digit' })} · ${counted.toLocaleString('en-US')} `, term('counted', what));
+
   const sign = (x) => (x > 0 ? '+' : x < 0 ? '−' : '±');
   const change = (a, b, share) => { // rounded first, so a change that rounds to 0 reads ±0
     if (!share && b === 0) return '–';
     const d = Math.round(share ? (a - b) * 100 : (a / b - 1) * 100);
     return `${sign(d)}${Math.abs(d)}${share ? ' pts' : '%'}`;
   };
-  const kpis = [
-    { k: `${noun} / week`, f: perWeek((ws) => sum(ws, shown)), show: (v) => v.toFixed(0), noteCounted: true },
-    { k: 'New features / week', f: perWeek((ws) => sum(ws, (r) => r.counts.added ?? 0)), show: (v) => v.toFixed(0) },
-    { k: FIX, f: pooledFix, show: pct, share: true },
-    ...(changelog ? [{ k: 'Versions released / week', f: perWeek(inWeeks), show: (v) => v.toFixed(1) }]
-      : [{ k: SIZE, f: (ws) => median(ws.flatMap((r) => r.lines ?? [])), show: (v) => v.toFixed(0), note: 'lines' }]),
+  const kpis = [ // id: the definition the label links
+    { k: `${noun} / week`, id: 'counted', f: perWeek((ws) => sum(ws, shown)), show: (v) => v.toFixed(0) },
+    { k: 'New features / week', id: 'added', f: perWeek((ws) => sum(ws, (r) => r.counts.added ?? 0)), show: (v) => v.toFixed(0) },
+    { k: FIX, id: 'fix', f: pooledFix, show: pct, share: true },
+    ...(changelog ? [{ k: 'Versions released / week', id: 'versions', f: perWeek(inWeeks), show: (v) => v.toFixed(1) }]
+      : [{ k: SIZE, id: 'lines', f: (ws) => median(ws.flatMap((r) => r.lines ?? [])), show: (v) => v.toFixed(0) }]),
   ];
-  $('kpis').replaceChildren(...kpis.map(({ k, f, show, share, noteCounted, note }) => {
+  $('kpis').replaceChildren(...kpis.map(({ k, id, f, show, share }) => {
     const a = last.length ? f(last) : null;
     const b = ref.length ? f(ref) : null;
-    const vs = a == null || b == null ? ['no prior period'] : [el('b', { textContent: change(a, b, share) }), ` vs prior period (${show(b)})`];
-    return el('div', { className: 'kpi' }, el('div', { className: 'k' }, k, ...(noteCounted ? [fn('counted')] : []), fn('window'), ...(share ? [fn('fix')] : []), ...(note ? [fn(note)] : [])),
-      el('div', { className: 'v', textContent: a == null ? '–' : show(a) }), el('div', { className: 'ref' }, ...vs));
+    const vs = a == null || b == null ? ['no prior period'] : [el('b', { textContent: change(a, b, share) }), ' vs ', term('window', 'prior period'), ` (${show(b)})`];
+    return el('div', { className: 'kpi' }, el('div', { className: 'k' }, term(id, k)), el('div', { className: 'v', textContent: a == null ? '–' : show(a) }), el('div', { className: 'ref' }, ...vs));
   }));
-  const aside = changelog ? 'items that announce rather than change something' : 'maintenance commits (chores, tests, docs, CI) and unreadable subjects';
-  $('fn-counted').textContent = `Counted ${noun.toLowerCase()}: those that added, fixed, changed (incl. improved) or removed something (incl. reverts). `
-    + `Not counted: ${setAside.toLocaleString('en-US')} ${aside}.`;
-  $('fn-window').textContent = `Tiles: the last ${last.length} complete week${last.length === 1 ? '' : 's'}${last.length ? ` (${span(last)})` : ''} vs the ${ROLL} weeks before${ref.length ? ` (${span(ref)})` : ''}. Weeks start Monday 00:00 UTC.`;
-  $('fn-fix').textContent = `${FIX}: (fixed + reverts) ÷ counted ${noun.toLowerCase()}. The chart line pools each week with the ${ROLL - 1} before it.`;
-  $('fn-lines').hidden = changelog; // changelog items have no size
-  $('fn-lines').textContent = `${SIZE}: median lines added + deleted per counted commit (vs its first parent), so one sweeping commit does not move it. Commits with no recorded size are left out.`;
+
+  // ---- provenance, the second half of the help panel ----
+  const repoName = (url) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/\.git$/, '');
+  const source = project.source; // the one public URL the build publishes per project
+  const lead = (text) => el('b', { textContent: `${text} ` });
+  $('about-body').replaceChildren(
+    el('p', {}, lead('Source.'), ...(changelog
+      ? ['One item per bullet of ', source ? ext(source, 'CHANGELOG.md') : 'the changelog', ', dated by the version\'s npm publish time.']
+      : ['One item per commit on the main branch of ', source ? ext(source, repoName(source)) : 'the repository', ', dated by commit time.'])),
+    el('p', {}, lead('Categories.'), `Each ${what.replace(/s$/, '')} gets one category from its wording: added, fixed, changed or removed. A language model decides when the wording does not say.`),
+    el('p', {}, lead('Updates.'), 'Collected every six hours. The header shows when the data last changed.'),
+  );
 
   // ---- shared chart furniture: not-yet-collected hatch, model markers ----
   const inRange = (a) => vendors.includes(a.vendor) && Date.parse(a.date) < end && Date.parse(a.date) + DAY > anchor;
@@ -216,8 +254,7 @@ async function projectPage() {
   // ---- fix share: rolling window over the preceding weeks, nothing past the current week ----
   const rolling = rows.map((_, i) => (curIdx >= 0 && i > curIdx ? null : pooledFix(rows.slice(Math.max(0, i - ROLL + 1), i + 1))));
   $('title').textContent = `${noun} per week`;
-  $('subtitle').replaceChildren(`${changelog ? 'Changelog items, by the week their version shipped' : 'First-parent commits on the default branch, by the week they landed'}. `
-    + `The line is ${FIX}`, fn('fix'), ` on the right axis. ${hover() ? 'Click' : 'Tap twice on'} a week to list its ${noun.toLowerCase()}.`);
+  $('subtitle').textContent = `${hover() ? 'Click' : 'Tap twice on'} a week to list its ${what}.`;
 
   // ---- one chart: stacked weekly bars by group, the rolling fix share drawn over them on a 0–100% axis ----
   // The second y-axis is the owner's call against the dataviz one-axis rule: a separate fix-share chart above the
@@ -311,7 +348,7 @@ async function projectPage() {
   const item = (cls, text, props = {}) => el('span', props, el('span', { className: `sw ${cls}` }), text);
   $('legend').replaceChildren(
     ...groups.map((g) => el('span', {}, el('span', { className: 'sw', style: `background:${g.color}` }), cap(g.key))),
-    el('span', {}, el('span', { className: 'sw line' }), el('span', {}, FIX, fn('fix'), ' (right axis)')),
+    el('span', {}, el('span', { className: 'sw line' }), el('span', {}, term('fix', FIX), ' (right axis)')),
     ...(major.length ? [el('span', {}, el('span', { className: 'sw marker' }), 'Major model release')] : []),
     item('hatch', 'Not yet collected', { id: 'legend-hatch', hidden: true }));
   chart.update(); // the hatch legend entry is decided inside the draw, which ran before the entry existed
@@ -326,7 +363,6 @@ async function projectPage() {
     const months = [...new Set(dailyRaw.filter((r) => r.d >= d && r.d <= to && r.total > 0).map((r) => r.d.slice(0, 7)))];
     const events = (await Promise.all(months.map((m) => get(`${D}${id}/months/${m}.json`)))).flat()
       .filter((e) => e.ts.slice(0, 10) >= d && e.ts.slice(0, 10) <= to && groupOf(e.category)); // the list matches the bar
-    const what = noun.toLowerCase();
     $('drill-title').textContent = `${view === 'week' ? weekSpan(d, true) : fmt(d, true)} · ${events.length} ${what}`;
     // One line per item under group headers: changelog items by version (the version is the reference, named once
     // in its header); commits by day in the week view, each with its sha. The day view of commits needs no header.
@@ -336,7 +372,6 @@ async function projectPage() {
       if (!groups.length || keyOf(e) !== groups.at(-1).key) groups.push({ key: keyOf(e), items: [] });
       groups.at(-1).items.push(e);
     }
-    const ext = (href, text, className) => el('a', { className, href, target: '_blank', rel: 'noopener', textContent: text });
     const list = $('drill-list');
     list.replaceChildren(...groups.flatMap(({ key, items }) => {
       const [e] = items;
@@ -353,7 +388,7 @@ async function projectPage() {
       return head ? [head, ul] : [ul];
     }));
     list.scrollTop = 0;
-    $('drill-empty').textContent = `No counted ${what}.`;
+    $('drill-empty').textContent = `No ${what}.`;
     $('drill-empty').hidden = events.length > 0;
     list.hidden = events.length === 0;
     $('drill').hidden = false;

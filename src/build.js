@@ -7,7 +7,8 @@ import { classifyByRule, CATEGORIES, COUNTED } from './classify.js';
 
 /*
  * Output under docs/data/ (validate.js checks the invariants):
- *   projects.json            [{ id, name, basis, annotations: [vendor], links }]
+ *   projects.json            [{ id, name, basis, annotations: [vendor], links, source? }]   source: the one URL the page's
+ *                            help dialog links (the changelog, or the git repo); the rest of the config's sources is not published
  *   annotations.json         copy of annotations.json
  *   <project>/summary.json   { project, name, basis, generatedAt, firstDate, lastDate,
  *                              totals: { events, byCategory, bySource: { rule, model, pending }, versions? } }   versions: changelog
@@ -128,9 +129,10 @@ function buildProject(project, root, out, generatedAt) {
 export function build({ root = REPO, out = join(root, 'docs'), now = new Date() } = {}) {
   const generatedAt = new Date(now).toISOString();
   const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
-  json(join(out, 'data', 'projects.json'), projects.map((p) => ({
-    id: p.id, name: p.name, basis: p.basis, annotations: p.annotations ?? [], links: p.links ?? {},
-  })));
+  json(join(out, 'data', 'projects.json'), projects.map((p) => {
+    const source = p.sources?.changelog ?? p.sources?.git?.repo;
+    return { id: p.id, name: p.name, basis: p.basis, annotations: p.annotations ?? [], links: p.links ?? {}, ...(source ? { source } : {}) };
+  }));
   write(join(out, 'data', 'annotations.json'), rows(readJson(join(root, 'annotations.json'), [])));
   for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
   if (resolve(out) !== resolve(REPO, 'docs')) write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));

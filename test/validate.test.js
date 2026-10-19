@@ -73,6 +73,7 @@ for (const [name, change, want] of [
   ['a project without a name', json('data/projects.json', set((ps) => { delete ps[0].name; })), /^data\/projects\.json: claude-code: missing string name$/],
   ['a project with an unknown basis', json('data/projects.json', set((ps) => { ps[1].basis = 'nope'; })), /^data\/projects\.json: sparse: unknown basis nope$/],
   ['a project whose annotations are not a list', json('data/projects.json', set((ps) => { ps[0].annotations = 'anthropic'; })), /^data\/projects\.json: claude-code: bad annotations\/links$/],
+  ['a project whose source is not a URL', json('data/projects.json', set((ps) => { ps[0].source = 'CHANGELOG.md'; })), /^data\/projects\.json: claude-code: source is not a URL$/],
   ['a project without its page', (out) => rmSync(join(out, 'claude-code', 'index.html')), /^claude-code\/index\.html: missing page$/],
   ['annotations that are not a list', json('data/annotations.json', () => ({})), /^data\/annotations\.json: not an array$/],
   ...['date', 'label', 'vendor', 'kind', 'source'].map((k) => [`an annotation without a ${k}`, json('data/annotations.json', set((a) => { delete a[0][k]; })), /^data\/annotations\.json: bad entry /]),

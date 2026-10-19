@@ -119,6 +119,8 @@ test('pages for every project in config, public projects.json, annotations passt
   const pub = j('data/projects.json');
   assert.deepEqual(pub.map((p) => p.id), ['claude-code', 'sparse']);
   assert.equal('sources' in pub[0], false);
+  assert.equal(pub[0].source, config[0].sources.changelog); // one public URL per project, not the config's sources
+  assert.equal('source' in pub[1], false); // the fixture's sparse project has none
   assert.deepEqual(pub[1].annotations, ['openai']);
   assert.equal(j('data/annotations.json').length, 2);
 });

@@ -21,6 +21,7 @@ export function validate(out) {
     for (const k of ['id', 'name', 'basis']) if (typeof p[k] !== 'string') bad('data/projects.json', `${p.id}: missing string ${k}`);
     if (!CATEGORIES[p.basis]) bad('data/projects.json', `${p.id}: unknown basis ${p.basis}`);
     if (!Array.isArray(p.annotations) || typeof p.links !== 'object') bad('data/projects.json', `${p.id}: bad annotations/links`);
+    if ('source' in p && !/^https?:\/\//.test(p.source)) bad('data/projects.json', `${p.id}: source is not a URL`);
     for (const f of [`${p.id}/index.html`]) if (!existsSync(join(out, f))) bad(f, 'missing page');
   }
   const ann = read('data/annotations.json');

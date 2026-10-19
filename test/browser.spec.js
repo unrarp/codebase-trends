@@ -58,6 +58,7 @@ const padWeeks = async (route) => {
 // y-axis it shows only panel: the first date label spills into the left strip and must not stay pinned. Touches on a
 // pin fall through to the chart, so a swipe that starts on an axis still scrolls it.
 async function expectPinned(page) {
+  await page.locator('.chart-frame').scrollIntoViewIfNeeded(); // elementFromPoint sees only the viewport, and the chart sits below the fold on a phone
   const pins = await page.evaluate(() => {
     const s = document.querySelector('.chart-scroll').getBoundingClientRect();
     const c = __chart.canvas;
@@ -185,10 +186,14 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       await open(page, 'sparse/');
       await expect(page.locator('#kpis .kpi')).toHaveCount(4);
       await expect(page.locator('#kpis .kpi').last().locator('.k')).toContainText('Commit size');
+      await page.locator('#info').click();
+      if (mobile) expect(await page.locator('#help').evaluate((d) => Math.round(d.getBoundingClientRect().width))).toBe(375); // a full-width sheet, past the browser's default dialog margin
+      await page.locator('#fn-lines').scrollIntoViewIfNeeded();
+      await expect(page.locator('#help-close')).toBeInViewport(); // the head stays put while the body scrolls
       await expect(page.locator('#fn-lines')).toBeVisible();
       await expect(page.locator('#fn-lines')).toContainText('added + deleted');
       await open(page, 'claude-code/');
-      await expect(page.locator('#fn-lines')).toBeHidden(); // changelog items have no size; the note is not numbered
+      await expect(page.locator('#fn-lines')).toHaveCount(0); // changelog items have no size
     });
 
     test('KPI tiles name the window and compare with the prior period', async ({ page }) => {
@@ -521,6 +526,51 @@ test('each KPI tile is its measure over the last 4 complete weeks against the 4 
     '−25 pts vs prior period (50%)', // fixes: 4 of 16 vs 4 of 8
     '+200% vs prior period (0.5)', // versions: 6 in 4 weeks vs 2
   ]);
+});
+
+test('a first visit sees one question; the (i) button and every label open the help dialog, labels at their definition', async ({ page }) => {
+  await open(page, 'claude-code/');
+  await expect(page.locator('#lede')).toHaveText("How much of Claude Code's work each week is new capability, and how much is correction?");
+  await expect(page.locator('.notes, sup.fn, .kpi .cap')).toHaveCount(0); // no footnotes, superscripts or captions in the default view
+  const help = page.locator('#help');
+  await expect(help).toHaveJSProperty('open', false);
+  const label = page.locator('#kpis .kpi .k a.term').nth(2); // Fixes %
+  await expect(label).toHaveAttribute('title', /fixed \+ reverts/); // the hover gloss is the definition itself
+  await expect(label).toHaveAttribute('href', '#fn-fix');
+  await label.click();
+  await expect(help).toHaveJSProperty('open', true);
+  await expect(page.locator('#fn-fix')).toBeInViewport();
+  expect(await page.locator('#fn-fix').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)'); // the jumped-to entry is tinted, not just renamed
+  await page.keyboard.press('Escape');
+  await expect(help).toHaveJSProperty('open', false);
+  await expect.poll(() => new URL(page.url()).hash).toBe(''); // closing forgets the entry (the dialog's close event is a task after it closes), so the next open starts at the top
+  await page.locator('#info').click(); // the button beside the theme toggle opens it too
+  await expect(help).toHaveJSProperty('open', true);
+  await expect(help.locator('h2')).toHaveText('How to read this page');
+  await help.locator('#help-close').click();
+  await expect(help).toHaveJSProperty('open', false);
+  await page.locator('#info').click();
+  await page.mouse.click(8, 8); // the backdrop
+  await expect(help).toHaveJSProperty('open', false);
+  await expect(help.locator('a[href^="http"]')).toHaveCount(1); // the source; the repo link is the GitHub icon beside the (i)
+  await expect(page.locator('#repo')).toHaveAttribute('href', 'https://github.com/unrarp/codebase-trends');
+  await expect(help.locator('a[href="https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md"]')).toHaveText('CHANGELOG.md');
+  await open(page, 'sparse/#fn-lines'); // a deep link: the entry is built after the page's own fragment jump
+  await expect(page.locator('#help')).toHaveJSProperty('open', true);
+  await expect(page.locator('#fn-lines')).toBeInViewport();
+  expect(await page.locator('#fn-lines').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  await expect(page.locator('#lede')).toContainText("Sparse's work");
+  await expect(page.locator('#help a[href^="http"]')).toHaveCount(0); // no source configured
+});
+
+test('a term link leaves a day deep link alone: the list stays open and the URL keeps the day after the dialog closes', async ({ page }) => {
+  await open(page, 'sparse/#2026-08-21');
+  await page.locator('#kpis .kpi .k a.term').first().click();
+  await expect(page.locator('#help')).toHaveJSProperty('open', true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#help')).toHaveJSProperty('open', false);
+  expect(new URL(page.url()).hash).toBe('#2026-08-21');
+  await expect(page.locator('#drill')).toBeVisible();
 });
 
 test('a bot commit carries a bot badge in the list, a person\'s does not', async ({ page }) => {

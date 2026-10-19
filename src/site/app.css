@@ -17,12 +17,15 @@ a { color: var(--link); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .crumb { color: var(--muted); margin: 0 0 12px; display: flex; align-items: center; gap: 6px; }
-.theme { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; } /* the icon is the label; its name is in aria-label */
+.theme, .info, .repo { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; text-decoration: none; } /* the icon is the label; its name is in aria-label */
+.repo svg { width: 16px; height: 16px; fill: currentColor; }
+.info { margin-left: auto; width: 30px; border-radius: 50%; font: italic 600 14px/1 Georgia, "Times New Roman", serif; }
 .crumb select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
 .head { margin: 0 0 14px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; min-width: 0; }
 .panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
 h1 { font-size: 20px; margin: 0 0 4px; }
+.lede { margin: 0 0 6px; max-width: 72ch; }
 h2 { font-size: 16px; margin: 0; }
 .sub, .meta, .footnote { color: var(--muted); margin: 4px 0; }
 .footnote { font-size: 12px; }
@@ -34,8 +37,7 @@ h2 { font-size: 16px; margin: 0; }
 .kpi .v { font-size: 26px; font-weight: 600; line-height: 1.2; margin: 4px 0 2px; }
 .kpi .ref { color: var(--muted); font-size: 12px; }
 .kpi .ref b { color: var(--text); font-weight: 600; }
-sup.fn { font-size: 10px; line-height: 0; margin-left: 2px; }
-sup.fn a { color: var(--accent); text-decoration: none; }
+a.term { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; } /* a label with a definition behind it */
 
 .legend, .chips { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0; }
 .legend > * { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -51,13 +53,24 @@ sup.fn a { color: var(--accent); text-decoration: none; }
 .axis-pin.right { right: 0; }
 .chart-wrap { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); margin-top: 4px; }
 .chips { margin: 14px 0 0; }
-.notes { color: var(--muted); font-size: 12px; margin: 14px 0 0; padding-left: 18px; }
-.notes li { margin: 2px 0; }
-.notes li:target { color: var(--text); }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-size: 12px; max-width: 100%; }
 .chip .n { color: var(--marker); font-weight: 600; }
 .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--marker); flex: none; }
 
+/* The help dialog: a panel over the page, a full-height sheet on a phone. */
+.help { width: min(640px, calc(100% - 32px)); max-height: 85vh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); overflow: auto; }
+.help::backdrop { background: light-dark(rgba(0, 0, 0, .35), rgba(0, 0, 0, .6)); }
+.help-body { padding: 0 20px 18px; }
+.help .panel-head { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 18px 0 10px; } /* Close stays reachable while the body scrolls */
+.help h3 { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }
+.help dl, .help p { color: var(--muted); margin: 0; max-width: 72ch; }
+.help dt, .help b { color: var(--text); font-weight: 500; }
+.help p { margin-top: 8px; }
+.help dd { margin: 0; }
+/* One entry per definition; the one just jumped to is tinted and barred in the accent, so the eye lands on it. */
+.help dl > div { padding: 5px 10px; margin: 2px -10px 0; border-left: 3px solid transparent; border-radius: 6px; scroll-margin-top: 12px; }
+.help dl > div.current { border-left-color: var(--accent); background: light-dark(color-mix(in srgb, var(--accent) 9%, var(--panel)), color-mix(in srgb, var(--accent) 16%, var(--panel))); }
+.help dl > div.current dt { color: var(--accent); }
 .btn { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font-size: 12px; line-height: 1.5; color: var(--muted); } /* quiet: the title is the thing */
 .btn:hover { color: var(--text); }
 /* The week's list: a header per group (day or version), one line per item, capped so a 500-item week scrolls here, not the page. */
@@ -86,7 +99,11 @@ sup.fn a { color: var(--accent); text-decoration: none; }
   .panel, .kpi { padding: 14px 12px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi .v { font-size: 22px; }
-  .crumb select, .theme { min-height: 44px; min-width: 44px; }
+  .crumb { white-space: nowrap; } /* three icon buttons and the switcher fit one line at 375px only if the name does not wrap */
+  .crumb select { flex: 1; min-width: 0; }
+  .crumb select, .theme, .info, .repo { min-height: 44px; }
+  .theme, .info, .repo { min-width: 40px; padding: 6px 4px; }
+  .help { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; } /* the browser's own sheet caps a dialog at calc(100% - 6px - 2em) wide: without max-width: none a strip of page shows on the right */
   .chip .date { display: none; }
   .chip { padding: 3px 8px; }
   .ev { flex-wrap: wrap; gap: 4px 8px; }

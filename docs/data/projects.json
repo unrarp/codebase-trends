@@ -8,7 +8,8 @@
     ],
     "links": {
       "release": "https://github.com/anthropics/claude-code/releases/tag/v{version}"
-    }
+    },
+    "source": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md"
   },
   {
     "id": "codex",
@@ -19,6 +20,7 @@
     ],
     "links": {
       "commit": "https://github.com/openai/codex/commit/{sha}"
-    }
+    },
+    "source": "https://github.com/openai/codex"
   }
 ]
