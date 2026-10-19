@@ -1,118 +1,108 @@
 # codebase-trends
 
-Static dashboard at <https://unrarp.github.io/codebase-trends/> showing, per
-tracked project, how much of the work landing over time is new capability
-versus correction, overlaid with model-release markers.
+How much of the work landing in a codebase is new capability, and how much is
+correction? <https://unrarp.github.io/codebase-trends/> charts that per week
+for each tracked project, with major model releases marked. Tracked so far:
+Claude Code (from its changelog) and Codex (from its commits).
 
-A Claude Code routine (instructions in [`ROUTINE.md`](ROUTINE.md)) runs every
-six hours, collects data, commits it to this repo, and GitHub Pages serves
-`docs/`.
+A Claude Code routine collects every six hours and commits the result here;
+GitHub Pages serves `docs/`.
 
 ## What the site shows
 
-Per project, every change item is counted in the UTC week it shipped and
-categorised: `added`, `fixed`, `changed`, `improved`, `removed`, `other`, plus
-`revert`, `chore`, `test`, `docs`, `ci` for commit-based projects. The site
-shows four buckets: Added, Fixed, Changed (`changed` + `improved`) and Removed
-(`removed` + `revert`). Everything else (`other`, `chore`, `test`, `docs`,
-`ci`) is not a product change and is not counted anywhere; a note on the page
-says how many items were set aside. Every project page shows the same things,
-so projects compare on one footing:
+Every project page has the same layout, so projects compare on one footing.
 
-1. **KPI tiles**: items per week, new features (`added`) per week, fixes as a
-   percentage of changes ("Fixes %"), and either versions released per week
-   (changelog basis) or the median commit size (commits basis: lines added +
-   deleted per counted commit, as GitHub reports a diff, so a growing number
-   means changes are getting bigger), over the last 4 complete weeks, each
-   with its signed change vs the 4 weeks before underneath.
-   Numbered notes under the chart define what is counted, the windows and
-   the formula; the header, tiles and legend link to them.
-2. **One chart**: counted items per week by bucket as stacked bars, with the
-   4-week rolling fix share, `(fixed + revert) / counted items`, drawn over
-   them on a right-hand 0–100% axis. Clicking a week lists its counted items
-   (on touch screens, tap it twice). `#YYYY-MM-DD` deep-links a day's list. On
-   narrow screens the chart scrolls sideways and opens at the latest week.
+- **KPI tiles** over the last 4 complete weeks, each with its change against
+  the 4 weeks before: items per week, new features per week, Fixes %
+  (`(fixed + revert) ÷ counted items`), and either versions released per week
+  (changelog basis) or median commit size (commits basis: lines added +
+  deleted, as GitHub reports a diff).
+- **One chart**: counted items per week as stacked bars in four buckets, Added,
+  Fixed, Changed (`changed` + `improved`) and Removed (`removed` + `revert`),
+  with the 4-week rolling Fixes % drawn over them on a right-hand 0–100% axis.
+  Numbered markers are the model releases flagged `major` in
+  `annotations.json`, each linking its announcement. The span since the data
+  last changed is hatched "Not yet collected".
+- **Drill-down**: click a week (tap twice on touch screens) to list its items;
+  `#YYYY-MM-DD` deep-links a day.
+- **Numbered notes** under the chart define every term, window and formula;
+  tiles and legend link to them.
 
-Only model releases flagged `major` in `annotations.json` are drawn, as
-numbered markers; the other entries stay in the file unused. The site root opens the
-project last viewed in that browser (else the first in `projects.json`); a
-switcher on each page changes project. The span since the published data last
-changed is hatched "Not yet collected"; routine health itself is
-healthchecks.io's job (see Routine).
+Each item is counted in the UTC week it shipped and gets one category:
+`added`, `fixed`, `changed`, `improved`, `removed` or `other`, plus `revert`,
+`chore`, `test`, `docs`, `ci` for commits. `other`, `chore`, `test`, `docs` and
+`ci` are not product changes and are not counted; the page says how many were
+set aside.
+
+The site root opens the project last viewed in that browser, else the first in
+`projects.json`; a switcher on each page changes project.
+
+## How the data is made
 
 Two bases, set per project in `projects.json`:
 
 - **changelog**: one item per CHANGELOG.md bullet, dated by the version's npm
-  publish time (`seed/claude-code-dates.json` covers the claude-code versions
-  npm never listed).
-- **commits** (Codex): one item per first-parent commit on the default
-  branch since `sources.git.since`, with its diff size (`stats`: lines added,
-  deleted, files, against the first parent); a commit whose author or
-  co-author is in the project's `bots` list or ends in `[bot]` is flagged in
-  the drill-down.
-
-## Data flow
+  publish time (`seed/<project>-dates.json` covers versions npm never listed).
+  Each run collects the versions not yet stored; a bullet edited under a
+  stored version is ignored.
+- **commits**: one item per first-parent commit on the default branch since
+  `sources.git.since`, sized against its first parent (`stats`: lines added,
+  deleted, files). Each run re-reads that history from a blobless clone and
+  keeps the shas not yet stored. A commit whose author or co-author is in the
+  project's `bots` list, or ends in `[bot]`, is flagged in the drill-down.
 
 ```
-projects.json ─► src/collect.js ─► data/<project>/events.jsonl  (append-only raw facts; backfill-stats.js is the one rewrite, adding a field)
-                                   data/<project>/dates.json    (changelog basis)
-pending (events with no rule category and no label; derived by src/apply-labels.js, never stored)
-        ─► model (routine agent or scripts/classify-local.sh)
+projects.json ─► src/collect.js ─► data/<project>/events.jsonl   raw facts, append-only
+                                   data/<project>/dates.json     changelog basis
+pending = events with no rule category and no label (derived, never stored)
+        ─► model (the routine agent, or scripts/classify-local.sh)
         ─► src/apply-labels.js ─► data/<project>/classifications.jsonl
 events + rules (src/classify.js) + classifications + annotations.json
         ─► src/build.js ─► docs/data/** + docs/<project>/index.html
-        ─► src/validate.js (shape + invariants)
+        ─► src/validate.js   shape and invariants
 ```
 
-`data/` and `docs/` (except `docs/vendor/`) are machine-written; never edit
-them by hand.
+Categories are derived on every build, never stored on events: a rule in
+`src/classify.js` first, else the model's cached label for that text, else
+`other`. Changing a rule relabels all history on the next build. `data/` and
+`docs/` (except `docs/vendor/`) are machine-written; never edit them by hand.
 
-## Routine
+### Routine
 
-Every six hours (`0 */6 * * *`) a Claude Code routine runs `node src/routine.js`,
-which collects every project and builds the site. If that changes nothing under
-`data/` or `docs/` it stops there; otherwise it runs `npm run check:core`,
-commits `data/` and `docs/` and pushes to `master`. Either way a successful run
-pings healthchecks.io (period 6 h).
+Every six hours (`0 */6 * * *`) a Claude Code routine runs `node src/routine.js`.
+Its saved prompt only points to [`ROUTINE.md`](ROUTINE.md), so behaviour
+changes are commits. The script collects every project and builds the site. If nothing
+under `data/` or `docs/` changed it stops; otherwise it runs
+`npm run check:core`, commits `data/` and `docs/` and pushes to `master`.
+Either way a successful run pings healthchecks.io.
 
-- **Classify hand-off:** if new events have no rule category, the script writes
-  batches to `.routine/batches/` and exits 3. The agent labels them using
-  `src/model/prompt.md` into `.routine/answers/` (same file names) and runs
+- **Classify hand-off:** new events with no rule category are written as
+  batches to `.routine/batches/` and the script exits 3. The agent labels them
+  with `src/model/prompt.md` into `.routine/answers/` and runs
   `node src/routine.js --labels .routine/answers/`, which validates every
   answer before appending any. Unanswered items stay pending for the next run.
-- **Failure visibility:** any error pings `$HEALTHCHECK_URL/fail` (immediate
-  email); a run that never starts shows up as a missed ping. Pages keeps
-  serving the last successful commit.
-- **Saved prompt:** a stub that only says to follow `ROUTINE.md`, so behaviour
-  changes are commits.
-- **Cloud environment:** the default network allowlist reaches the npm
-  registry and GitHub; `hc-ping.com` must be added to the routine's
-  environment. A session runs on a `claude/…` branch with no local `master`,
-  so the script pushes `HEAD:master`, and `ROUTINE.md` tells the agent not to
-  push the session branch its stop hook reports as unpushed.
-- **Local backfill:** `scripts/classify-local.sh <project>` collects and labels
-  pending events with local `claude -p` (env `JOBS` parallel batches, default 4;
-  `LIMIT` only the first N batches). A failing batch is reported and the rest
-  are kept; re-run to re-ask what is still pending.
+- **Only what changed is committed.** The first build is stamped with the
+  published `generatedAt`; if `data/` and `docs/` then match the committed
+  tree, nothing is committed. Otherwise it rebuilds stamped now, so
+  `generatedAt` is the last time the published data changed and the hatch
+  starts there. A rule, template or annotation change counts as a change.
+- **Failure visibility:** any error pings `$HEALTHCHECK_URL/fail`; a run that
+  never starts is a missed ping. Pages keeps serving the last successful commit.
+- **Cloud environment:** the session runs on a `claude/…` branch with no local
+  `master`, so the script pushes `HEAD:master` and `ROUTINE.md` tells the agent
+  not to push the session branch. `hc-ping.com` must be on the environment's
+  network allowlist.
 
-## Adding a project
+## Developing
 
-1. Add an entry to `projects.json` (`id`, `name`, `basis`, `sources`, `links`,
-   `annotations`, and `bots` for commits basis) locally; don't push it yet.
-2. Run `scripts/classify-local.sh <id>` until nothing is pending. Commits
-   basis: the routine's blobless clone sizes new commits as they arrive, but
-   the history collected before this ran has no `stats`; give it some with
-   `node scripts/backfill-stats.js <id> <full-clone-dir>` against a full clone
-   (`git clone --no-checkout <repo>`), as was done once for Codex.
-3. Run `npm run build && npm run check`, then commit `projects.json`, `data/`
-   and `docs/` together (collect runs every project, so other projects may have
-   new data too) and push.
+```sh
+npm install
+npx playwright install chromium   # once, for the browser test
+git config core.hooksPath hooks   # runs `npm run check` before every push
+```
 
-Pushing the config before the backfill would make the next run try to
-classify the project's whole history in one session. Pages and the project
-switcher are generated from config; a new project needs no code.
-
-## Quality gates
+Zero runtime dependencies, plain ESM, Node ≥ 22; Playwright is the only
+devDependency.
 
 | script | runs | where |
 |---|---|---|
@@ -123,37 +113,31 @@ switcher are generated from config; a new project needs no code.
 | `npm run check:core` | test + check:syntax + check:data | routine, before every commit |
 | `npm run check` | check:core + check:browser | `hooks/pre-push` |
 
-The browser test builds the test fixtures into a temp dir and serves them at
-`/codebase-trends/`, so a root-absolute path fails it. Install its browser once
-with `npx playwright install chromium`.
+The browser test builds the fixtures into a temp dir and serves them at
+`/codebase-trends/`, so a root-absolute URL fails it.
 
-## Site
+The site is hand-written browser JS (`src/site/app.js`, `app.css`) plus
+Chart.js 4.5.1 (MIT), vendored unmodified at `docs/vendor/chart.umd.js`.
+`build.js` copies the site files into `docs/` and stamps each asset URL with
+its content hash, so a changed script loads with the page instead of after the
+Pages and browser caches expire.
 
-Hand-written browser JS (`src/site/app.js`, `app.css`) plus Chart.js
-**4.5.1** (MIT), vendored unmodified at `docs/vendor/chart.umd.js` from the npm
-tarball. `build.js` copies the site files into `docs/` and stamps each asset
-URL in the pages with its content hash (`app.js?v=…`), so a changed script or
-stylesheet loads with the page rather than after the Pages and browser caches
-expire. `annotations.json` holds the model-release markers, each with its
-announcement URL. Colours are `light-dark()` pairs in `app.css`, so the page
-follows the OS scheme; a button cycles auto, light and dark, and remembers a
-forced choice in `localStorage`.
+**Local backfill:** `scripts/classify-local.sh <project>` collects, then labels
+pending events with local `claude -p` (`JOBS` parallel batches, default 4;
+`LIMIT` runs only the first N). A failed batch is reported and the rest kept;
+re-run to re-ask what is still pending.
 
-## Design notes
+## Adding a project
 
-- **A run commits only what changed.** The routine first builds with the
-  `generatedAt` already published; if `data/` and `docs/` come out identical
-  to the committed tree, nothing is committed. Otherwise it rebuilds stamped
-  now, so `generatedAt` is the last time the published data changed and the
-  site's hatch starts there with no other state. A rule, template or
-  annotation change counts as a change and takes effect on the next run.
-- **Rules are applied at build time, never stored on events.** `events.jsonl`
-  holds raw facts only; categories are derived on every build (rule first,
-  then the cached model label by `textHash`, else `other`/pending). Changing a
-  rule relabels all history on the next build with no migration.
-- **Collection state is derived, not stored.** The changelog basis collects
-  versions not yet in `events.jsonl`; the commits basis re-reads history since
-  `sources.git.since` (a blob-less clone takes seconds) and skips known shas;
-  only the new ones are sized, each fetching its blobs on demand (~0.4 s per
-  commit).
-  A bullet edited under an already-collected version is ignored.
+1. Add an entry to `projects.json` (`id`, `name`, `basis`, `sources`, `links`,
+   `annotations`, and `bots` for the commits basis). Don't push yet: pushing
+   config before the backfill makes the next routine run classify the whole
+   history in one session.
+2. Run `scripts/classify-local.sh <id>` until nothing is pending.
+3. Run `npm run build && npm run check`, then commit `projects.json`, `data/`
+   and `docs/` together (collect runs every project, so others may have new
+   data too) and push.
+
+Pages and the project switcher are generated from config; a new project needs
+no code. Commits are sized as they are collected; `scripts/backfill-stats.js`
+adds `stats` to commit events stored without them, from a full clone.
