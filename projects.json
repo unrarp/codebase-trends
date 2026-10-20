@@ -1,12 +1,22 @@
 [
-  { "id": "claude-code", "name": "Claude Code", "basis": "changelog",
-    "sources": { "changelog": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
-                 "npm": "@anthropic-ai/claude-code" },
+  {
+    "id": "claude-code",
+    "name": "Claude Code",
+    "basis": "changelog",
+    "sources": {
+      "changelog": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+      "npm": "@anthropic-ai/claude-code"
+    },
     "links": { "release": "https://github.com/anthropics/claude-code/releases/tag/v{version}" },
-    "annotations": ["anthropic"] },
-  { "id": "codex", "name": "Codex", "basis": "commits",
+    "annotations": ["anthropic"]
+  },
+  {
+    "id": "codex",
+    "name": "Codex",
+    "basis": "commits",
     "sources": { "git": { "repo": "https://github.com/openai/codex", "branch": "main", "since": "2025-01-01" } },
     "bots": [],
     "links": { "commit": "https://github.com/openai/codex/commit/{sha}" },
-    "annotations": ["openai"] }
+    "annotations": ["openai"]
+  }
 ]

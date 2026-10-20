@@ -111,7 +111,7 @@ only devDependencies.
 | `npm test` | `node --test 'test/**/*.test.js'` | everywhere |
 | `npm run check:syntax` | `node --check` over `src/` and `scripts/` | everywhere |
 | `npm run check:data` | `node src/validate.js` over `docs/` | everywhere |
-| `npm run check:lint` | Biome lint with its recommended rules (`biome.json`) | local only |
+| `npm run check:lint` | `biome check`: recommended lint rules, formatting, import order (`biome.json`); `npx biome check --write` fixes | local only |
 | `npm run check:browser` | Playwright smoke test at 1280×800 and 375×812 | local only |
 | `npm run check:core` | test + check:syntax + check:data | routine, before every commit |
 | `npm run check` | check:core + check:lint + check:browser | `hooks/pre-push` |

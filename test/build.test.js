@@ -1,9 +1,9 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { build, eachDay, mondayOf } from '../src/build.js';
 import { tmp } from './tmp.js';
 
@@ -35,12 +35,18 @@ test('summary: totals, versions, bySource has rule, model and pending; undated v
   assert.deepEqual(keys(s.totals), ['byCategory', 'bySource', 'events', 'versions']);
   const releases = j('data/claude-code/releases.json');
   assert.equal(releases.length, 11);
-  assert.equal(releases.some((r) => r.version === '2.1.226'), false);
+  assert.equal(
+    releases.some((r) => r.version === '2.1.226'),
+    false,
+  );
 });
 
 test('daily: every calendar day to today, totals add up, no derived ratios stored', () => {
   const daily = j('data/claude-code/daily.json');
-  assert.deepEqual(daily.map((r) => r.d), eachDay('2026-07-03', '2026-10-14'));
+  assert.deepEqual(
+    daily.map((r) => r.d),
+    eachDay('2026-07-03', '2026-10-14'),
+  );
   assert.equal(sum(daily.map((r) => r.total)), 17);
   const d = Object.fromEntries(daily.map((r) => [r.d, r]));
   assert.equal(d['2026-08-31'].total, 4);
@@ -53,7 +59,10 @@ test('weekly: every ISO week keyed by Monday, totals add up', () => {
   const weekly = j('data/claude-code/weekly.json');
   assert.equal(weekly[0].d, '2026-06-29');
   assert.equal(weekly.at(-1).d, '2026-10-12');
-  assert.deepEqual(weekly.map((r) => r.d), eachDay('2026-06-29', '2026-10-12', 7));
+  assert.deepEqual(
+    weekly.map((r) => r.d),
+    eachDay('2026-06-29', '2026-10-12', 7),
+  );
   assert.ok(weekly.every((r) => mondayOf(r.d) === r.d));
   assert.equal(sum(weekly.map((r) => r.total)), 17);
   assert.equal(weekly.find((r) => r.d === '2026-08-31').total, 7); // Mon 08-31 (4) + 09-01 (2) + Sun 09-06 (1)
@@ -63,8 +72,14 @@ test('weekly: every ISO week keyed by Monday, totals add up', () => {
 test('sparse commits project: zero rows for gap days and weeks, UTC day shift', () => {
   const daily = j('data/sparse/daily.json');
   const weekly = j('data/sparse/weekly.json');
-  assert.deepEqual(daily.map((r) => r.d), eachDay('2026-08-03', '2026-10-14'));
-  assert.deepEqual(weekly.map((r) => r.d), eachDay('2026-08-03', '2026-10-12', 7));
+  assert.deepEqual(
+    daily.map((r) => r.d),
+    eachDay('2026-08-03', '2026-10-14'),
+  );
+  assert.deepEqual(
+    weekly.map((r) => r.d),
+    eachDay('2026-08-03', '2026-10-12', 7),
+  );
   assert.equal(daily.filter((r) => r.total === 0).length, daily.length - 5); // events on 08-03, 08-04, 08-05, 08-21, 09-14
   const d = Object.fromEntries(daily.map((r) => [r.d, r]));
   assert.equal(d['2026-08-03'].total, 1); // 23:30-02:00 on the 3rd is 01:30Z on the 4th
@@ -85,14 +100,20 @@ test('month sharding: events land in their UTC month, ts-ordered, with derived f
   assert.deepEqual(readdirSync(dir), ['2026-07.json', '2026-08.json', '2026-09.json']);
   const aug = j('data/claude-code/months/2026-08.json');
   assert.equal(aug.length, 2 + 2 + 1 + 4); // 08-19, 08-22 (two versions), 08-27, 08-31; 2.1.226 is undated
-  assert.deepEqual(aug.map((e) => e.ts), [...aug.map((e) => e.ts)].sort());
+  assert.deepEqual(
+    aug.map((e) => e.ts),
+    [...aug.map((e) => e.ts)].sort(),
+  );
   const e = aug.find((x) => x.id === '2.1.252#0');
   assert.equal(e.category, 'fixed');
   assert.equal(e.source, 'rule');
   assert.equal(e.url, 'https://github.com/anthropics/claude-code/releases/tag/v2.1.252');
   assert.equal('bot' in e, false);
   // Bullets of one version share its ts: the sort is stable, so they keep the changelog's order.
-  assert.deepEqual(aug.filter((x) => x.version === '2.1.237').map((x) => x.id), ['2.1.237#0', '2.1.237#1']);
+  assert.deepEqual(
+    aug.filter((x) => x.version === '2.1.237').map((x) => x.id),
+    ['2.1.237#0', '2.1.237#1'],
+  );
   const sep = j('data/claude-code/months/2026-09.json');
   assert.equal(sep.find((x) => x.id === '2.1.272#0').source, 'model');
   assert.equal(j('data/claude-code/months/2026-07.json').find((x) => x.version === '2.1.201').source, 'pending');
@@ -117,7 +138,10 @@ test('pages for every project in config, public projects.json, annotations passt
   }
   assert.ok(existsSync(join(out, 'index.html')));
   const pub = j('data/projects.json');
-  assert.deepEqual(pub.map((p) => p.id), ['claude-code', 'sparse']);
+  assert.deepEqual(
+    pub.map((p) => p.id),
+    ['claude-code', 'sparse'],
+  );
   assert.equal('sources' in pub[0], false);
   assert.equal(pub[0].source, config[0].sources.changelog); // one public URL per project, not the config's sources
   assert.equal('source' in pub[1], false); // the fixture's sparse project has none
@@ -127,7 +151,12 @@ test('pages for every project in config, public projects.json, annotations passt
 
 test('a rebuild with the same now is byte-identical', () => {
   const again = buildFixture();
-  for (const f of ['data/claude-code/summary.json', 'data/claude-code/daily.json', 'data/sparse/weekly.json', 'data/claude-code/months/2026-08.json']) {
+  for (const f of [
+    'data/claude-code/summary.json',
+    'data/claude-code/daily.json',
+    'data/sparse/weekly.json',
+    'data/claude-code/months/2026-08.json',
+  ]) {
     assert.equal(readFileSync(join(again, f), 'utf8'), readFileSync(join(out, f), 'utf8'));
   }
 });
@@ -152,7 +181,11 @@ test('commits basis: weekly rows carry the sorted add+del sizes of the counted c
 });
 
 test('asset URLs carry a content hash, so a changed script or stylesheet is refetched with the page', () => {
-  const hash = (f) => createHash('sha256').update(readFileSync(join(out, f))).digest('hex').slice(0, 8);
+  const hash = (f) =>
+    createHash('sha256')
+      .update(readFileSync(join(out, f)))
+      .digest('hex')
+      .slice(0, 8);
   const page = readFileSync(join(out, 'claude-code/index.html'), 'utf8');
   assert.match(page, new RegExp(`href="\\.\\./app\\.css\\?v=${hash('app.css')}"`));
   assert.match(page, new RegExp(`src="\\.\\./app\\.js\\?v=${hash('app.js')}"`));

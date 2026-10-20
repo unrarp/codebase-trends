@@ -1,7 +1,7 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { test } from 'node:test';
 import { backfillStats } from '../scripts/backfill-stats.js';
 import { tmp } from './tmp.js';
 
@@ -15,7 +15,12 @@ test('backfill adds stats to commit events that lack them, keeps order, bytes an
   ].join('\n')}\n`;
   writeFileSync(path, before);
   const asked = [];
-  const repo = { numstat: (shas) => { asked.push(...shas); return new Map([['a', { add: 1, del: 2, files: 1 }]]); } };
+  const repo = {
+    numstat: (shas) => {
+      asked.push(...shas);
+      return new Map([['a', { add: 1, del: 2, files: 1 }]]);
+    },
+  };
   assert.equal(backfillStats(path, repo), 1);
   assert.deepEqual(asked, ['a', 'c']); // b already has stats; the changelog event is not a commit
   const after = readFileSync(path, 'utf8').split('\n');

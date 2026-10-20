@@ -10,7 +10,10 @@ export function readJsonl(path) {
     if (e.code === 'ENOENT') return [];
     throw e;
   }
-  return raw.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
 }
 
 /** Appends rows as JSONL lines, creating the directory if needed. */

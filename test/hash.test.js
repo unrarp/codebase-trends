@@ -1,5 +1,5 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { textHash } from '../src/hash.js';
 
 test('textHash is the key of every stored label: a known event keeps its hash', () => {

@@ -1,15 +1,27 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readdirSync, appendFileSync, cpSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { prepareBatches, countsFromNumstat, commitMessage, stageAndCount, buildIfChanged, main } from '../src/routine.js';
+import { test } from 'node:test';
 import { build } from '../src/build.js';
+import {
+  buildIfChanged,
+  commitMessage,
+  countsFromNumstat,
+  main,
+  prepareBatches,
+  stageAndCount,
+} from '../src/routine.js';
 import { tmp } from './tmp.js';
 
-const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }, { id: 'r', basis: 'changelog' }];
+const projects = [
+  { id: 'p', basis: 'changelog' },
+  { id: 'q', basis: 'changelog' },
+  { id: 'r', basis: 'changelog' },
+];
 const H = (n) => String(n).padStart(16, '0');
-const eventLines = (hs) => hs.map((h) => `${JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` })}\n`).join(''); // 't1' has no rule
+const eventLines = (hs) =>
+  hs.map((h) => `${JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` })}\n`).join(''); // 't1' has no rule
 
 function dataTree(pendingByProject) {
   const root = tmp('routine-');
@@ -22,7 +34,7 @@ function dataTree(pendingByProject) {
 }
 
 test('only projects with pending get batch files', () => {
-  const { root, dataRoot } = dataTree({ p: [1, 2], q: [], /* r: no file */ });
+  const { root, dataRoot } = dataTree({ p: [1, 2], q: [] /* r: no file */ });
   const dir = join(root, 'batches');
   mkdirSync(dir);
   writeFileSync(join(dir, 'stale-1.txt'), 'old');
@@ -63,7 +75,8 @@ test('counts and message derive from numstat text', () => {
 
 test('change detection on a temp git repo', () => {
   const root = tmp('routine-git-');
-  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
+  const git = (...a) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
   mkdirSync(join(root, 'data', 'p'), { recursive: true });
   writeFileSync(join(root, 'data', 'p', 'events.jsonl'), '{"a":1}\n{"a":2}\n');
   writeFileSync(join(root, 'data', 'p', 'classifications.jsonl'), '{"c":1}\n');
@@ -83,16 +96,23 @@ test('change detection on a temp git repo', () => {
 test('buildIfChanged: an unchanged build keeps the committed generatedAt and reports false; new data rebuilds stamped now', () => {
   const root = tmp('routine-build-');
   cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
-  const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
-  const generatedAt = () => JSON.parse(readFileSync(join(root, 'docs', 'data', 'claude-code', 'summary.json'), 'utf8')).generatedAt;
+  const git = (...a) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
+  const generatedAt = () =>
+    JSON.parse(readFileSync(join(root, 'docs', 'data', 'claude-code', 'summary.json'), 'utf8')).generatedAt;
   const T0 = '2026-10-14T12:00:00.000Z';
   const T1 = '2026-10-14T13:00:00.000Z';
   build({ root, now: new Date(T0) });
-  git('init', '-q'); git('add', '.'); git('commit', '-q', '-m', 'init');
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-q', '-m', 'init');
   assert.equal(buildIfChanged({ root, now: new Date(T1) }), false);
   assert.equal(generatedAt(), T0); // the site still says T0: nothing new to publish
   assert.equal(git('status', '--porcelain', '--', 'data', 'docs').trim(), '');
-  appendFileSync(join(root, 'data', 'sparse', 'events.jsonl'), `${JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] })}\n`);
+  appendFileSync(
+    join(root, 'data', 'sparse', 'events.jsonl'),
+    `${JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] })}\n`,
+  );
   assert.equal(buildIfChanged({ root, now: new Date(T1) }), true);
   assert.equal(generatedAt(), T1);
 });
@@ -104,26 +124,53 @@ function routineRepo() {
   build({ root, now: new Date('2026-10-14T12:00:00.000Z') });
   const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
-  for (const [k, v] of [['user.name', 't'], ['user.email', 't@t'], ['core.hooksPath', join(root, '.git', 'no-hooks')]]) git('config', k, v);
-  git('add', '.'); git('commit', '-q', '-m', 'init');
+  for (const [k, v] of [
+    ['user.name', 't'],
+    ['user.email', 't@t'],
+    ['core.hooksPath', join(root, '.git', 'no-hooks')],
+  ])
+    git('config', k, v);
+  git('add', '.');
+  git('commit', '-q', '-m', 'init');
   const remote = tmp('routine-origin-');
   execFileSync('git', ['init', '-q', '--bare', remote]);
   git('remote', 'add', 'origin', remote);
   const calls = [];
   const collected = [];
-  const deps = { root, collect: async (_projects, opts) => { calls.push('collect'); collected.push(opts); }, check: () => { calls.push('check'); }, ping: async () => { calls.push('ping'); } };
+  const deps = {
+    root,
+    collect: async (_projects, opts) => {
+      calls.push('collect');
+      collected.push(opts);
+    },
+    check: () => {
+      calls.push('check');
+    },
+    ping: async () => {
+      calls.push('ping');
+    },
+  };
   const origin = (...a) => execFileSync('git', ['--git-dir', remote, ...a], { encoding: 'utf8' }).trim();
   return { root, git, origin, calls, collected, deps };
 }
 /** Silences console.log for the test; the returned function lists what was logged so far. */
-const logs = (t) => { const m = t.mock.method(console, 'log', () => {}); return () => m.mock.calls.map((c) => c.arguments[0]); };
+const logs = (t) => {
+  const m = t.mock.method(console, 'log', () => {});
+  return () => m.mock.calls.map((c) => c.arguments[0]);
+};
 /** Answers every batch line of the last classify hand-off: changelog items `added`, commits `fixed`. */
 function answerBatches(root) {
   const answers = join(root, '.routine', 'answers');
   mkdirSync(answers, { recursive: true });
   for (const f of readdirSync(join(root, '.routine', 'batches'))) {
-    const hashes = readFileSync(join(root, '.routine', 'batches', f), 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split('\t')[0]);
-    writeFileSync(join(answers, f), hashes.map((h) => `${h}: ${f.startsWith('sparse') ? 'fixed' : 'added'}\n`).join(''));
+    const hashes = readFileSync(join(root, '.routine', 'batches', f), 'utf8')
+      .split('\n')
+      .filter((l) => l && !l.startsWith('#'))
+      .map((l) => l.split('\t')[0]);
+    writeFileSync(
+      join(answers, f),
+      hashes.map((h) => `${h}: ${f.startsWith('sparse') ? 'fixed' : 'added'}\n`).join(''),
+    );
   }
   return answers;
 }
@@ -171,7 +218,9 @@ test('main stops before committing when check:core fails, and reports its output
   const answers = answerBatches(r.root);
   const head = r.git('rev-parse', 'HEAD');
   r.calls.length = 0;
-  const check = () => { throw Object.assign(new Error('exit 1'), { stdout: 'not ok 1 - x\n', stderr: '' }); };
+  const check = () => {
+    throw Object.assign(new Error('exit 1'), { stdout: 'not ok 1 - x\n', stderr: '' });
+  };
   await assert.rejects(main(['--labels', answers], { ...r.deps, check }), /^Error: check:core failed\nnot ok 1 - x/);
   assert.equal(r.git('rev-parse', 'HEAD'), head);
   assert.equal(r.origin('branch', '--list'), ''); // nothing pushed

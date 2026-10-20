@@ -1,10 +1,9 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { parseGitLog, parseNumstat, openRepo, shallowSince, collectGitLog } from '../src/adapters/git-log.js';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { test } from 'node:test';
+import { collectGitLog, openRepo, parseGitLog, parseNumstat, shallowSince } from '../src/adapters/git-log.js';
 import { textHash } from '../src/hash.js';
 import { tmp } from './tmp.js';
 
@@ -37,7 +36,10 @@ test('trailing (#n) becomes a pr tag', () => {
 });
 
 test('commit subject: regression then pr tag, in that order', () => {
-  const [e] = parseGitLog('abc\x1f2026-01-01T00:00:00Z\x1fa\x1fa@b\x1ffix crash, a regression introduced in v1.2.3 (#9)\x1f\x1e', 'bun');
+  const [e] = parseGitLog(
+    'abc\x1f2026-01-01T00:00:00Z\x1fa\x1fa@b\x1ffix crash, a regression introduced in v1.2.3 (#9)\x1f\x1e',
+    'bun',
+  );
   assert.deepEqual(e.tags, ['regression:1.2.3', 'pr:9']);
 });
 
@@ -56,16 +58,28 @@ test('shallowSince is one day before from', () => {
 const project = { id: 'bun', sources: { git: { repo: 'r', branch: 'main', since: '2026-04-26' } } };
 const spy = () => {
   const calls = [];
-  return { calls, fetchRaw: async (git, from, use) => { calls.push({ git, from }); return use({ log: () => raw, numstat: () => new Map() }); } };
+  return {
+    calls,
+    fetchRaw: async (git, from, use) => {
+      calls.push({ git, from });
+      return use({ log: () => raw, numstat: () => new Map() });
+    },
+  };
 };
 
 test('collect fetches from `since`, with or without stored events', async () => {
   // Resuming from the newest stored ts can cut off a first-parent commit whose committer date is older.
   const s = spy();
-  const existing = [{ sha: 'x', ts: '2026-05-01T00:00:00.000Z' }, { sha: 'y', ts: '2026-06-01T12:00:00.000Z' }];
+  const existing = [
+    { sha: 'x', ts: '2026-05-01T00:00:00.000Z' },
+    { sha: 'y', ts: '2026-06-01T12:00:00.000Z' },
+  ];
   await collectGitLog(project, existing, s.fetchRaw);
   await collectGitLog(project, [], s.fetchRaw);
-  assert.deepEqual(s.calls.map((c) => c.from), ['2026-04-26T00:00:00.000Z', '2026-04-26T00:00:00.000Z']);
+  assert.deepEqual(
+    s.calls.map((c) => c.from),
+    ['2026-04-26T00:00:00.000Z', '2026-04-26T00:00:00.000Z'],
+  );
 });
 
 test('commits with ts < since are dropped; the rest come back oldest first', async () => {
@@ -73,7 +87,10 @@ test('commits with ts < since are dropped; the rest come back oldest first', asy
   // since 2026-04-26 keeps d578f57 (04-26T10:33Z) and the two Update CLAUDE.md commits; drops the 4 older ones
   assert.equal(out.length, 3);
   assert.ok(out.every((e) => e.ts >= '2026-04-26T00:00:00.000Z'));
-  assert.deepEqual(out.map((e) => e.ts), [...out.map((e) => e.ts)].sort());
+  assert.deepEqual(
+    out.map((e) => e.ts),
+    [...out.map((e) => e.ts)].sort(),
+  );
 });
 
 test('leading [Tag] groups are stripped from the subject into lowercase tags', () => {
@@ -97,14 +114,26 @@ test('parseNumstat: add, del and file count per sha; a binary file counts as a f
 
 test('openRepo.numstat runs against a real repo, including a merge measured against its first parent', () => {
   const dir = tmp('ct-numstat-');
-  const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' } }).trim();
+  const git = (...args) =>
+    execFileSync('git', ['-C', dir, ...args], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'a',
+        GIT_AUTHOR_EMAIL: 'a@b',
+        GIT_COMMITTER_NAME: 'a',
+        GIT_COMMITTER_EMAIL: 'a@b',
+      },
+    }).trim();
   git('init', '-q', '-b', 'main');
   writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
-  git('add', 'a.txt'); git('commit', '-q', '-m', 'root');
+  git('add', 'a.txt');
+  git('commit', '-q', '-m', 'root');
   const root = git('rev-parse', 'HEAD');
   git('checkout', '-q', '-b', 'side');
   writeFileSync(join(dir, 'b.txt'), '1\n2\n3\n');
-  git('add', 'b.txt'); git('commit', '-q', '-m', 'side');
+  git('add', 'b.txt');
+  git('commit', '-q', '-m', 'side');
   git('checkout', '-q', 'main');
   writeFileSync(join(dir, 'a.txt'), 'one\n');
   git('commit', '-q', '-am', 'trim');
@@ -121,7 +150,14 @@ test('openRepo.numstat runs against a real repo, including a merge measured agai
 test('collect asks the repo for the stats of new shas only and stores them on the events', async () => {
   const asked = [];
   const sizes = new Map([['d578f574e565ca740729abb6c7c1f6a3f02f11b1', { add: 1, del: 2, files: 3 }]]);
-  const fetchRaw = async (_git, _from, use) => use({ log: () => raw, numstat: (shas) => { asked.push(...shas); return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)])); } });
+  const fetchRaw = async (_git, _from, use) =>
+    use({
+      log: () => raw,
+      numstat: (shas) => {
+        asked.push(...shas);
+        return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)]));
+      },
+    });
   const all = await collectGitLog(project, [], fetchRaw);
   assert.equal(all.length, 3);
   assert.deepEqual(asked.sort(), all.map((e) => e.sha).sort());
@@ -136,16 +172,28 @@ test('collect asks the repo for the stats of new shas only and stores them on th
 
 test('a commit at the shallow boundary gets no stats: with its parent cut off it would be sized against an empty tree', () => {
   const src = tmp('ct-shallow-src-');
-  const env = { ...process.env, GIT_AUTHOR_NAME: 'a', GIT_AUTHOR_EMAIL: 'a@b', GIT_COMMITTER_NAME: 'a', GIT_COMMITTER_EMAIL: 'a@b' };
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'a',
+    GIT_AUTHOR_EMAIL: 'a@b',
+    GIT_COMMITTER_NAME: 'a',
+    GIT_COMMITTER_EMAIL: 'a@b',
+  };
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env }).trim();
   git(src, 'init', '-q', '-b', 'main');
   writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(500));
   git(src, 'add', 'big.txt');
-  execFileSync('git', ['-C', src, 'commit', '-q', '-m', 'old'], { env: { ...env, GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z' } });
+  execFileSync('git', ['-C', src, 'commit', '-q', '-m', 'old'], {
+    env: { ...env, GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z' },
+  });
   writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(501));
-  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'one line'], { env: { ...env, GIT_COMMITTER_DATE: '2026-06-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-01T00:00:00Z' } });
+  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'one line'], {
+    env: { ...env, GIT_COMMITTER_DATE: '2026-06-01T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-01T00:00:00Z' },
+  });
   writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(502));
-  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'another line'], { env: { ...env, GIT_COMMITTER_DATE: '2026-06-02T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-02T00:00:00Z' } });
+  execFileSync('git', ['-C', src, 'commit', '-q', '-am', 'another line'], {
+    env: { ...env, GIT_COMMITTER_DATE: '2026-06-02T00:00:00Z', GIT_AUTHOR_DATE: '2026-06-02T00:00:00Z' },
+  });
   const [newer, boundary] = git(src, 'log', '--format=%H', '-2').split('\n');
   const clone = tmp('ct-shallow-clone-');
   execFileSync('git', ['clone', '-q', '--no-checkout', '--shallow-since=2026-05-01', `file://${src}`, clone], { env }); // a plain path would not be shallow

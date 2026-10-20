@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textHash } from '../hash.js';
-import { retry, RETRY } from '../net.js';
+import { RETRY, retry } from '../net.js';
 import { stripTags, textTags } from './changelog-md.js';
 
 export const GIT_LOG_FORMAT = '%H%x1f%cI%x1f%an%x1f%ae%x1f%s%x1f%b%x1e';
@@ -65,11 +65,20 @@ export function openRepo(dir) {
       const stats = new Map();
       // A commit at a shallow clone's boundary has its parent cut off and would be sized against an empty tree.
       const shallowFile = git(['rev-parse', '--git-path', 'shallow']).trim();
-      const boundary = new Set(existsSync(join(dir, shallowFile)) ? readFileSync(join(dir, shallowFile), 'utf8').split('\n') : []);
+      const boundary = new Set(
+        existsSync(join(dir, shallowFile)) ? readFileSync(join(dir, shallowFile), 'utf8').split('\n') : [],
+      );
       shas = shas.filter((s) => !boundary.has(s));
       for (let i = 0; i < shas.length; i += 500) {
         // A merge is measured against its first parent, like the history it sits in. Blobs fetch on demand in a blobless clone.
-        const raw = git(['log', '--no-walk', '--numstat', '--diff-merges=first-parent', '--format=%x1e%H', ...shas.slice(i, i + 500)]);
+        const raw = git([
+          'log',
+          '--no-walk',
+          '--numstat',
+          '--diff-merges=first-parent',
+          '--format=%x1e%H',
+          ...shas.slice(i, i + 500),
+        ]);
         for (const [sha, s] of parseNumstat(raw)) stats.set(sha, s);
       }
       return stats;
@@ -83,8 +92,21 @@ export async function fetchGitLog(git, from, use) {
   try {
     await retry(async () => {
       rmSync(dir, { recursive: true, force: true });
-      execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', '--single-branch', '--branch', git.branch,
-        `--shallow-since=${shallowSince(from)}`, git.repo, dir], { stdio: 'pipe' });
+      execFileSync(
+        'git',
+        [
+          'clone',
+          '--filter=blob:none',
+          '--no-checkout',
+          '--single-branch',
+          '--branch',
+          git.branch,
+          `--shallow-since=${shallowSince(from)}`,
+          git.repo,
+          dir,
+        ],
+        { stdio: 'pipe' },
+      );
     }, RETRY);
     return await use(openRepo(dir));
   } finally {
@@ -100,7 +122,9 @@ export async function collectGitLog(project, existing, fetchRaw = fetchGitLog) {
   const since = new Date(git.since).toISOString();
   return fetchRaw(git, since, async (repo) => {
     // Always from `since`: resuming from the newest stored ts could cut off a first-parent commit with an older committer date.
-    const fresh = parseGitLog(repo.log(), project.id).filter((e) => !known.has(e.sha) && e.ts >= since).reverse(); // oldest first
+    const fresh = parseGitLog(repo.log(), project.id)
+      .filter((e) => !known.has(e.sha) && e.ts >= since)
+      .reverse(); // oldest first
     const stats = await retry(async () => repo.numstat(fresh.map((e) => e.sha)), RETRY); // a blobless clone fetches blobs here
     for (const e of fresh) if (stats.has(e.sha)) e.stats = stats.get(e.sha);
     return fresh;

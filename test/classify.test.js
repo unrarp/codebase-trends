@@ -1,17 +1,32 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { classifyByRule, CATEGORIES, COUNTED } from '../src/classify.js';
+import { test } from 'node:test';
 import { parseChangelog } from '../src/adapters/changelog-md.js';
+import { CATEGORIES, COUNTED, classifyByRule } from '../src/classify.js';
 
 const ev = (text) => ({ kind: 'changelog', text });
 
 const table = {
-  fix: 'fixed', fixes: 'fixed', fixed: 'fixed',
-  add: 'added', adds: 'added', added: 'added', new: 'added',
-  improve: 'improved', improves: 'improved', improved: 'improved', reduced: 'improved', faster: 'improved',
-  change: 'changed', changed: 'changed', update: 'changed', updated: 'changed',
-  remove: 'removed', removes: 'removed', removed: 'removed', deprecated: 'removed',
+  fix: 'fixed',
+  fixes: 'fixed',
+  fixed: 'fixed',
+  add: 'added',
+  adds: 'added',
+  added: 'added',
+  new: 'added',
+  improve: 'improved',
+  improves: 'improved',
+  improved: 'improved',
+  reduced: 'improved',
+  faster: 'improved',
+  change: 'changed',
+  changed: 'changed',
+  update: 'changed',
+  updated: 'changed',
+  remove: 'removed',
+  removes: 'removed',
+  removed: 'removed',
+  deprecated: 'removed',
 };
 
 for (const [word, category] of Object.entries(table)) {
@@ -45,7 +60,18 @@ test('a leading "Scope:" lead-in is skipped to find the first word', () => {
 
 const cm = (text, project = {}) => classifyByRule({ kind: 'commit', text }, project);
 
-const PREFIXES = { feat: 'added', fix: 'fixed', perf: 'improved', refactor: 'changed', chore: 'chore', build: 'chore', style: 'chore', test: 'test', docs: 'docs', ci: 'ci' };
+const PREFIXES = {
+  feat: 'added',
+  fix: 'fixed',
+  perf: 'improved',
+  refactor: 'changed',
+  chore: 'chore',
+  build: 'chore',
+  style: 'chore',
+  test: 'test',
+  docs: 'docs',
+  ci: 'ci',
+};
 for (const [prefix, category] of Object.entries(PREFIXES)) {
   for (const form of [`${prefix}: x`, `${prefix}(scope): x`, `${prefix}!: x`, `${prefix}(scope)!: x`]) {
     test(`commit "${form}" -> ${category}`, () => assert.equal(cm(form), category));
@@ -73,14 +99,23 @@ test('commit first-word fallback, incl. Scope: lead-in', () => {
 });
 
 test('commit rule categories stay inside CATEGORIES.commits', () => {
-  const texts = [...Object.keys(PREFIXES).map((p) => `${p}: x`), 'Revert x', 'Fix x', 'Add x', 'Improve x', 'Change x', 'Remove x'];
+  const texts = [
+    ...Object.keys(PREFIXES).map((p) => `${p}: x`),
+    'Revert x',
+    'Fix x',
+    'Add x',
+    'Improve x',
+    'Change x',
+    'Remove x',
+  ];
   for (const t of texts) assert.ok(CATEGORIES.commits.includes(cm(t)), t);
 });
 
-test('COUNTED matches the site\'s GROUPS (src/site/app.js), which draws and counts the same buckets', () => {
+test("COUNTED matches the site's GROUPS (src/site/app.js), which draws and counts the same buckets", () => {
   const app = readFileSync(new URL('../src/site/app.js', import.meta.url), 'utf8');
-  const groups = [...app.match(/const GROUPS = \[\n.*?\n\];/s)[0].matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g)]
-    .map((m) => [m[1], [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1])]);
+  const groups = [
+    ...app.match(/const GROUPS = \[\n.*?\n\s*\];/s)[0].matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g),
+  ].map((m) => [m[1], [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1])]);
   assert.equal(groups.length, 4);
   assert.deepEqual(groups.flatMap(([, cats]) => cats).sort(), [...COUNTED].sort());
   assert.ok(COUNTED.every((c) => CATEGORIES.commits.includes(c)));

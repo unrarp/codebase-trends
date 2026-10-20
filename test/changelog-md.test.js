@@ -1,6 +1,6 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
 import { parseChangelog } from '../src/adapters/changelog-md.js';
 import { textHash } from '../src/hash.js';
 
@@ -11,7 +11,10 @@ const byVersion = (v) => events.filter((e) => e.version === v);
 test('header date is stripped and ids are version#index', () => {
   const e = byVersion('2.1.0');
   assert.equal(e.length, 4);
-  assert.deepEqual(e.map((x) => x.id), ['2.1.0#0', '2.1.0#1', '2.1.0#2', '2.1.0#3']);
+  assert.deepEqual(
+    e.map((x) => x.id),
+    ['2.1.0#0', '2.1.0#1', '2.1.0#2', '2.1.0#3'],
+  );
   assert.ok(events.every((x) => x.kind === 'changelog' && x.project === 'claude-code'));
 });
 

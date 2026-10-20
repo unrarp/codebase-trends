@@ -1,3 +1,4 @@
+// biome-ignore format: one line per category
 const SYNONYMS = {
   fix: 'fixed', fixes: 'fixed', fixed: 'fixed',
   add: 'added', adds: 'added', added: 'added', new: 'added',
@@ -7,7 +8,10 @@ const SYNONYMS = {
 };
 
 function firstWordCategory(text, map) {
-  const word = text.split(/\s+/)[0].toLowerCase().replace(/[:,]+$/, '');
+  const word = text
+    .split(/\s+/)[0]
+    .toLowerCase()
+    .replace(/[:,]+$/, '');
   return Object.hasOwn(map, word) ? map[word] : null;
 }
 
@@ -19,6 +23,7 @@ function changelogRule(event) {
 }
 
 const CONVENTIONAL = /^(feat|fix|perf|refactor|chore|build|test|docs|ci|style)(\(.*\))?!?:/;
+// biome-ignore format: one line per category
 const PREFIX_CATEGORY = {
   feat: 'added', fix: 'fixed', perf: 'improved', refactor: 'changed',
   chore: 'chore', build: 'chore', style: 'chore', test: 'test', docs: 'docs', ci: 'ci',
@@ -33,9 +38,12 @@ function commitRule(event, project) {
 /** Rule-based category for an event, or null (residual → model). Applied at build, never stored. */
 export function classifyByRule(event, project) {
   switch (event.kind) {
-    case 'changelog': return changelogRule(event, project);
-    case 'commit': return commitRule(event, project);
-    default: return null;
+    case 'changelog':
+      return changelogRule(event, project);
+    case 'commit':
+      return commitRule(event, project);
+    default:
+      return null;
   }
 }
 

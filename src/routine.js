@@ -1,11 +1,11 @@
-import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { collect } from './collect.js';
-import { build } from './build.js';
+import { fileURLToPath } from 'node:url';
 import { applyLabels, writeBatches } from './apply-labels.js';
-import { retry, RETRY } from './net.js';
+import { build } from './build.js';
+import { collect } from './collect.js';
+import { RETRY, retry } from './net.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -24,7 +24,8 @@ export function countsFromNumstat(text) {
     const m = /^(\d+)\t\d+\tdata\/([^/]+)\/(events|classifications)\.jsonl$/.exec(line);
     if (!m || m[1] === '0') continue;
     byProject[m[2]] = true;
-    if (m[3] === 'events') events += Number(m[1]); else labels += Number(m[1]);
+    if (m[3] === 'events') events += Number(m[1]);
+    else labels += Number(m[1]);
   }
   return { events, labels, projects: Object.keys(byProject) };
 }
@@ -33,7 +34,8 @@ export function commitMessage({ events, labels, projects }) {
   return `data: ${projects.join(', ') || 'no changes'} +${events} events, +${labels} labels`;
 }
 
-const run = (cmd, args, cwd = ROOT) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const run = (cmd, args, cwd = ROOT) =>
+  execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 /**
  * Builds docs/ stamped with the generatedAt already published; when that leaves data/ and docs/ identical to the
@@ -66,15 +68,26 @@ async function ping(suffix = '') {
 }
 
 /** One routine run in the repo at `root`; returns the exit code. Collection, the check and the ping are injectable for tests. */
-export async function main(argv, { root = ROOT, collect: collectAll = collect, check = () => run('npm', ['run', 'check:core'], root), ping: notify = ping } = {}) {
+export async function main(
+  argv,
+  {
+    root = ROOT,
+    collect: collectAll = collect,
+    check = () => run('npm', ['run', 'check:core'], root),
+    ping: notify = ping,
+  } = {},
+) {
   const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
   const dataRoot = join(root, 'data');
   const labelsAt = argv.indexOf('--labels');
   if (labelsAt >= 0) {
     const dir = argv[labelsAt + 1];
     if (!dir) throw new Error('--labels needs a directory');
-    const files = readdirSync(dir).sort().map((f) => join(dir, f));
-    for (const [id, n] of Object.entries(applyLabels(files, { dataRoot, projects }))) console.log(`${id}: appended ${n} labels`);
+    const files = readdirSync(dir)
+      .sort()
+      .map((f) => join(dir, f));
+    for (const [id, n] of Object.entries(applyLabels(files, { dataRoot, projects })))
+      console.log(`${id}: appended ${n} labels`);
   } else {
     await collectAll(projects, { dataRoot, seedDir: join(root, 'seed') });
     rmSync(join(root, '.routine', 'answers'), { recursive: true, force: true }); // stale answers would fail --labels
@@ -111,7 +124,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exitCode = await main(process.argv.slice(2));
   } catch (e) {
     console.error(e.message);
-    try { await ping('/fail'); } catch (pe) { console.error(`fail ping: ${pe.message}`); }
+    try {
+      await ping('/fail');
+    } catch (pe) {
+      console.error(`fail ping: ${pe.message}`);
+    }
     process.exitCode = 1;
   }
 }

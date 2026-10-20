@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES, classifyByRule } from './classify.js';
@@ -19,7 +19,8 @@ export function pendingOf(project, { dataRoot = join(ROOT, 'data') } = {}) {
   const classified = new Set(readJsonl(join(dir, 'classifications.jsonl')).map((c) => c.textHash));
   const pending = new Map();
   for (const e of readJsonl(join(dir, 'events.jsonl'))) {
-    if (classifyByRule(e, project) === null && !classified.has(e.textHash) && !pending.has(e.textHash)) pending.set(e.textHash, { textHash: e.textHash, text: e.text });
+    if (classifyByRule(e, project) === null && !classified.has(e.textHash) && !pending.has(e.textHash))
+      pending.set(e.textHash, { textHash: e.textHash, text: e.text });
   }
   return [...pending.values()];
 }
@@ -31,7 +32,10 @@ export function writeBatches(project, dir, { dataRoot = join(ROOT, 'data') } = {
   mkdirSync(dir, { recursive: true });
   const paths = [];
   for (let i = 0; i < pending.length; i += BATCH_SIZE) {
-    const body = pending.slice(i, i + BATCH_SIZE).map((p) => `${p.textHash}\t${p.text.replace(/\s+/g, ' ')}\n`).join('');
+    const body = pending
+      .slice(i, i + BATCH_SIZE)
+      .map((p) => `${p.textHash}\t${p.text.replace(/\s+/g, ' ')}\n`)
+      .join('');
     const path = join(dir, `${project.id}-${i / BATCH_SIZE + 1}.txt`);
     writeFileSync(path, header + body);
     paths.push(path);
@@ -43,7 +47,14 @@ export function writeBatches(project, dir, { dataRoot = join(ROOT, 'data') } = {
  * Validates every answer file, then appends labels. Throws (appending nothing) on the first violation.
  * Returns { [project]: appendedCount }.
  */
-export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8')), now = () => new Date().toISOString() } = {}) {
+export function applyLabels(
+  files,
+  {
+    dataRoot = join(ROOT, 'data'),
+    projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8')),
+    now = () => new Date().toISOString(),
+  } = {},
+) {
   const byProject = new Map(); // id -> Map(textHash -> category)
   const state = new Map();
   for (const file of files) {
@@ -57,16 +68,20 @@ export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = J
     }
     const pending = state.get(project.id);
     const found = byProject.get(project.id);
-    readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-      if (!line.trim()) return;
-      const fail = (why) => { throw new Error(`${file}:${i + 1}: ${why}: ${line}`); };
-      const lm = /^([0-9a-f]{16}): (\S+)$/.exec(line.trim());
-      if (!lm) fail('malformed line');
-      const [, hash, category] = lm;
-      if (!pending.has(hash)) fail('hash not pending');
-      if (!CATEGORIES[project.basis].includes(category)) fail(`category not in ${project.basis} set`);
-      if (!found.has(hash)) found.set(hash, category);
-    });
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (!line.trim()) return;
+        const fail = (why) => {
+          throw new Error(`${file}:${i + 1}: ${why}: ${line}`);
+        };
+        const lm = /^([0-9a-f]{16}): (\S+)$/.exec(line.trim());
+        if (!lm) fail('malformed line');
+        const [, hash, category] = lm;
+        if (!pending.has(hash)) fail('hash not pending');
+        if (!CATEGORIES[project.basis].includes(category)) fail(`category not in ${project.basis} set`);
+        if (!found.has(hash)) found.set(hash, category);
+      });
   }
   const ts = now();
   const counts = {};
@@ -81,13 +96,15 @@ export function applyLabels(files, { dataRoot = join(ROOT, 'data'), projects = J
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [first, ...rest] = process.argv.slice(2);
   try {
-    if (first === '--write-batches') { // --write-batches <project> <dir>
+    if (first === '--write-batches') {
+      // --write-batches <project> <dir>
       const projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8'));
       const project = projects.find((p) => p.id === rest[0]);
       if (!project) throw new Error(`unknown project ${rest[0]}`);
       for (const p of writeBatches(project, rest[1])) console.log(p);
     } else {
-      for (const [id, n] of Object.entries(applyLabels(process.argv.slice(2)))) console.log(`${id}: appended ${n} labels`);
+      for (const [id, n] of Object.entries(applyLabels(process.argv.slice(2))))
+        console.log(`${id}: appended ${n} labels`);
     }
   } catch (e) {
     console.error(e.message);

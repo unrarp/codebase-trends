@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, readdirSync, existsSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expect, test } from '@playwright/test';
 import { build } from '../src/build.js';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
@@ -22,13 +22,17 @@ test.beforeAll(async () => {
     const url = new URL(req.url, 'http://x').pathname;
     let file = url.startsWith(PREFIX) ? join(out, normalize(url.slice(PREFIX.length))) : null;
     if (file && existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
-    if (!file || !existsSync(file)) { res.writeHead(404).end(); return; }
+    if (!file || !existsSync(file)) {
+      res.writeHead(404).end();
+      return;
+    }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(readFileSync(file));
   });
   await new Promise((r) => server.listen(0, r));
   base = `http://localhost:${server.address().port}${PREFIX}`;
 });
-test.afterAll(() => { // also after a failed beforeAll, which may leave server unset
+test.afterAll(() => {
+  // also after a failed beforeAll, which may leave server unset
   server?.close();
   if (out) rmSync(out, { recursive: true, force: true });
 });
@@ -42,7 +46,11 @@ async function open(page, path, at = NOW) {
   if (path !== '') await page.waitForFunction(() => window.__chart);
   return errors;
 }
-const slot = (page) => page.evaluate(() => { const s = __chart.scales.x; return s.getPixelForValue(1) - s.getPixelForValue(0); });
+const slot = (page) =>
+  page.evaluate(() => {
+    const s = __chart.scales.x;
+    return s.getPixelForValue(1) - s.getPixelForValue(0);
+  });
 // Chart.js handles canvas events once per animation frame, so two synthetic clicks in one frame collapse into the last.
 const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
@@ -50,7 +58,11 @@ const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationF
 const padWeeks = async (route) => {
   const res = await route.fetch();
   const w = await res.json();
-  const pad = Array.from({ length: 40 }, (_, k) => ({ d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10), counts: {}, total: 0 }));
+  const pad = Array.from({ length: 40 }, (_, k) => ({
+    d: new Date(Date.parse(w[0].d) - (40 - k) * 7 * 86_400_000).toISOString().slice(0, 10),
+    counts: {},
+    total: 0,
+  }));
   await route.fulfill({ response: res, json: [...pad, ...w] });
 };
 // Each pin sits on its edge of the scroller, as wide as its axis, and shows the axis the chart drew there: tick labels
@@ -65,8 +77,12 @@ async function expectPinned(page) {
     const dpr = __chart.currentDevicePixelRatio;
     const a = __chart.chartArea;
     const cut = Math.round((__chart.scales.x.top + __chart.scales.x.options.grid.tickLength) * dpr) * 4; // in bytes per column
-    const strip = (x0, x1) => c.getContext('2d').getImageData(Math.round(x0 * dpr), 0, Math.round((x1 - x0) * dpr), c.height).data;
-    return [['left', 0, a.left], ['right', a.right, __chart.width]].map(([side, x0, x1]) => {
+    const strip = (x0, x1) =>
+      c.getContext('2d').getImageData(Math.round(x0 * dpr), 0, Math.round((x1 - x0) * dpr), c.height).data;
+    return [
+      ['left', 0, a.left],
+      ['right', a.right, __chart.width],
+    ].map(([side, x0, x1]) => {
       const p = document.querySelector(`.axis-pin.${side}`);
       const r = p.getBoundingClientRect();
       const ink = strip(x0, x1);
@@ -76,12 +92,27 @@ async function expectPinned(page) {
       let differ = 0;
       const under = new Set();
       for (let i = 3; i < ink.length; i += 4) {
-        if (i > below) { under.add(own.slice(i - 3, i + 1).join()); continue; }
+        if (i > below) {
+          under.add(own.slice(i - 3, i + 1).join());
+          continue;
+        }
         if (ink[i] > 0) inked++;
-        if (ink[i] === 255 && (ink[i - 3] !== own[i - 3] || ink[i - 2] !== own[i - 2] || ink[i - 1] !== own[i - 1])) differ++; // opaque chart pixels copy over exactly
+        if (ink[i] === 255 && (ink[i - 3] !== own[i - 3] || ink[i - 2] !== own[i - 2] || ink[i - 1] !== own[i - 1]))
+          differ++; // opaque chart pixels copy over exactly
       }
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return { side, through: hit === c, x: r.left - s.left, right: s.right - r.right, w: r.width, axisW: x1 - x0, inked, differ, under: under.size, sizes: own.length === ink.length };
+      return {
+        side,
+        through: hit === c,
+        x: r.left - s.left,
+        right: s.right - r.right,
+        w: r.width,
+        axisW: x1 - x0,
+        inked,
+        differ,
+        under: under.size,
+        sizes: own.length === ink.length,
+      };
     });
   });
   for (const p of pins) {
@@ -95,7 +126,10 @@ async function expectPinned(page) {
   }
 }
 
-for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 }], ['mobile 375x812', { width: 375, height: 812 }]]) {
+for (const [name, viewport] of [
+  ['desktop 1280x800', { width: 1280, height: 800 }],
+  ['mobile 375x812', { width: 375, height: 812 }],
+]) {
   test.describe(name, () => {
     test.use({ viewport });
     const mobile = viewport.width < 720;
@@ -109,7 +143,9 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(errors).toEqual([]);
     });
 
-    test('with a pointer, one click highlights the week and opens its list, changelog items grouped under their version', async ({ page }) => {
+    test('with a pointer, one click highlights the week and opens its list, changelog items grouped under their version', async ({
+      page,
+    }) => {
       await open(page, 'claude-code/');
       await page.locator('#chart').scrollIntoViewIfNeeded();
       const { x, y } = await page.evaluate(() => {
@@ -119,13 +155,17 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
         const box = __chart.canvas.getBoundingClientRect();
         return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3 };
       });
-      await page.mouse.move(x, y); await frame(page);
+      await page.mouse.move(x, y);
+      await frame(page);
       await expect(page.locator('#drill')).toBeHidden(); // hovering only reads
       expect(await page.evaluate(() => __chart.tooltip.footer)).toEqual(['Click to list']); // the hint is there before any click
       expect(await page.evaluate(() => __chart.tooltip.title[0])).toMatch(/^\w+ \d+ – (\w+ )?\d+ · \d+ items$/); // short enough for a phone-width tooltip
-      await page.mouse.click(x, y); await frame(page);
+      await page.mouse.click(x, y);
+      await frame(page);
       await expect(page.locator('#drill')).toBeVisible();
-      expect(await page.evaluate(() => __chart.$selected)).toEqual(expect.objectContaining({ width: expect.any(Number) })); // the listed week is highlighted
+      expect(await page.evaluate(() => __chart.$selected)).toEqual(
+        expect.objectContaining({ width: expect.any(Number) }),
+      ); // the listed week is highlighted
       expect(await page.locator('#drill li.ev').count()).toBeGreaterThan(0);
       await expect(page.locator('#drill-list h3 a').first()).toHaveText(/^\d+\.\d+\.\d+$/); // the version heads its group
       await expect(page.locator('#drill li.ev .ref')).toHaveCount(0); // and is not repeated per item
@@ -182,12 +222,15 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       expect(m[1].y).not.toBe(m[0].y);
     });
 
-    test('sparse commits project shows four KPI tiles, the last one commit size with its own note', async ({ page }) => {
+    test('sparse commits project shows four KPI tiles, the last one commit size with its own note', async ({
+      page,
+    }) => {
       await open(page, 'sparse/');
       await expect(page.locator('#kpis .kpi')).toHaveCount(4);
       await expect(page.locator('#kpis .kpi').last().locator('.k')).toContainText('Commit size');
       await page.locator('#info').click();
-      if (mobile) expect(await page.locator('#help').evaluate((d) => Math.round(d.getBoundingClientRect().width))).toBe(375); // a full-width sheet, past the browser's default dialog margin
+      if (mobile)
+        expect(await page.locator('#help').evaluate((d) => Math.round(d.getBoundingClientRect().width))).toBe(375); // a full-width sheet, past the browser's default dialog margin
       await page.locator('#fn-lines').scrollIntoViewIfNeeded();
       await expect(page.locator('#help-close')).toBeInViewport(); // the head stays put while the body scrolls
       await expect(page.locator('#fn-lines')).toBeVisible();
@@ -206,38 +249,51 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
     });
 
     // sparse: its revert counts as a fix, which the changelog project cannot show
-    for (const id of ['claude-code', 'sparse']) test(`fix share line is the 4-week pooled share of the weekly rows: ${id}`, async ({ page }) => {
-      await open(page, `${id}/`);
-      const fix = await page.evaluate(() => { const d = __chart.data.datasets.find((x) => x.label === 'Fixes %'); return { axis: d.yAxisID, v: d.data }; });
-      expect(fix.axis).toBe('y1');
-      const vals = fix.v.filter((v) => v !== null);
-      expect(vals.length).toBeGreaterThan(0);
-      expect(vals.every((v) => v >= 0 && v <= 1)).toBe(true);
-      const weekly = JSON.parse(readFileSync(join(out, `data/${id}/weekly.json`), 'utf8'));
-      const c = (r, k) => r.counts[k] ?? 0;
-      const pooled = (rows) => {
-        const den = rows.reduce((s, r) => s + ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'].reduce((a, k) => a + c(r, k), 0), 0); // the four counted buckets
-        return den === 0 ? null : rows.reduce((s, r) => s + c(r, 'fixed') + c(r, 'revert'), 0) / den;
-      };
-      const want = weekly.map((_, i) => pooled(weekly.slice(Math.max(0, i - 3), i + 1)));
-      expect(fix.v.length).toBe(want.length);
-      expect(want.filter((v) => v !== null && v !== 0).length).toBeGreaterThan(0); // the fixture has weeks where the denominator matters
-      want.forEach((w, i) => {
-        if (w === null) expect(fix.v[i]).toBeNull();
-        else expect(fix.v[i]).toBeCloseTo(w, 10);
+    for (const id of ['claude-code', 'sparse'])
+      test(`fix share line is the 4-week pooled share of the weekly rows: ${id}`, async ({ page }) => {
+        await open(page, `${id}/`);
+        const fix = await page.evaluate(() => {
+          const d = __chart.data.datasets.find((x) => x.label === 'Fixes %');
+          return { axis: d.yAxisID, v: d.data };
+        });
+        expect(fix.axis).toBe('y1');
+        const vals = fix.v.filter((v) => v !== null);
+        expect(vals.length).toBeGreaterThan(0);
+        expect(vals.every((v) => v >= 0 && v <= 1)).toBe(true);
+        const weekly = JSON.parse(readFileSync(join(out, `data/${id}/weekly.json`), 'utf8'));
+        const c = (r, k) => r.counts[k] ?? 0;
+        const pooled = (rows) => {
+          const den = rows.reduce(
+            (s, r) =>
+              s + ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'].reduce((a, k) => a + c(r, k), 0),
+            0,
+          ); // the four counted buckets
+          return den === 0 ? null : rows.reduce((s, r) => s + c(r, 'fixed') + c(r, 'revert'), 0) / den;
+        };
+        const want = weekly.map((_, i) => pooled(weekly.slice(Math.max(0, i - 3), i + 1)));
+        expect(fix.v.length).toBe(want.length);
+        expect(want.filter((v) => v !== null && v !== 0).length).toBeGreaterThan(0); // the fixture has weeks where the denominator matters
+        want.forEach((w, i) => {
+          if (w === null) expect(fix.v[i]).toBeNull();
+          else expect(fix.v[i]).toBeCloseTo(w, 10);
+        });
       });
-    });
 
     test('narrow screens scroll the chart to the latest week with both axes pinned in view', async ({ page }) => {
       test.skip(!mobile, 'mobile only');
       await page.route('**/data/claude-code/weekly.json', padWeeks);
       await open(page, 'claude-code/');
-      const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft, pos: __chart.scales.y.position }; });
+      const m = await page.evaluate(() => {
+        const s = document.querySelector('.chart-scroll');
+        return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft, pos: __chart.scales.y.position };
+      });
       expect(m.sw).toBeGreaterThan(m.cw);
       expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
       expect(m.pos).toBe('left');
       await expectPinned(page);
-      await page.evaluate(() => { document.querySelector('.chart-scroll').scrollLeft = 0; });
+      await page.evaluate(() => {
+        document.querySelector('.chart-scroll').scrollLeft = 0;
+      });
       await expectPinned(page);
     });
 
@@ -269,7 +325,13 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
     });
 
     test('blocked storage still renders the page and redirects the root', async ({ page }) => {
-      await page.addInitScript(() => Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('blocked', 'SecurityError'); } }));
+      await page.addInitScript(() =>
+        Object.defineProperty(window, 'localStorage', {
+          get() {
+            throw new DOMException('blocked', 'SecurityError');
+          },
+        }),
+      );
       const errors = await open(page, 'sparse/');
       await page.goto(base);
       await page.waitForURL(`${base}claude-code/`);
@@ -283,39 +345,56 @@ test('a category outside the four buckets is not drawn and not counted, and the 
   await page.route('**/data/claude-code/summary.json', async (route) => {
     const res = await route.fetch();
     const s = await res.json();
-    s.totals.byCategory.mystery = 5; s.totals.events += 5;
+    s.totals.byCategory.mystery = 5;
+    s.totals.events += 5;
     await route.fulfill({ response: res, json: s });
   });
   await page.route('**/data/claude-code/weekly.json', async (route) => {
     const res = await route.fetch();
     const w = await res.json();
-    w[0].counts.mystery = 5; w[0].total += 5; // first week carries the unknown category
+    w[0].counts.mystery = 5;
+    w[0].total += 5; // first week carries the unknown category
     await route.fulfill({ response: res, json: w });
   });
   const errors = await open(page, 'claude-code/');
   await expect(page.locator('#legend')).toHaveText(/^ChangedFixedAddedRemoved/);
   const first = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'))[0].counts;
   const counted = ['added', 'fixed', 'changed', 'improved', 'removed'].reduce((s, k) => s + (first[k] ?? 0), 0);
-  expect(await page.evaluate(() => __chart.data.datasets.filter((d) => !d.type).reduce((s, d) => s + d.data[0], 0))).toBe(counted); // mystery and other excluded
+  expect(
+    await page.evaluate(() => __chart.data.datasets.filter((d) => !d.type).reduce((s, d) => s + d.data[0], 0)),
+  ).toBe(counted); // mystery and other excluded
   const other = JSON.parse(readFileSync(join(out, 'data/claude-code/summary.json'), 'utf8')).totals.byCategory.other;
-  await expect(page.locator('#fn-counted')).toContainText(`Not counted: ${5 + other} items that announce rather than change something`); // 5 mystery + the fixture's other
+  await expect(page.locator('#fn-counted')).toContainText(
+    `Not counted: ${5 + other} items that announce rather than change something`,
+  ); // 5 mystery + the fixture's other
   const events = JSON.parse(readFileSync(join(out, 'data/claude-code/summary.json'), 'utf8')).totals.events;
   await expect(page.locator('#meta')).toContainText(`${events + 5 - other - 5} changelog items`); // header counts only the four buckets
   expect(errors).toEqual([]);
 });
 
 test('the week list and tooltip total exclude set-aside items and label rows by stored category', async ({ page }) => {
-  const months = readdirSync(join(out, 'data/claude-code/months')).flatMap((f) => JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8')));
-  const monday = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10); };
+  const months = readdirSync(join(out, 'data/claude-code/months')).flatMap((f) =>
+    JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8')),
+  );
+  const monday = (d) => {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+  };
   const byWeek = Map.groupBy(months, (e) => monday(e.ts.slice(0, 10)));
-  const [week, evs] = [...byWeek].find(([, es]) => es.some((e) => e.category === 'other') && es.some((e) => e.category !== 'other')); // a week with both kinds
+  const [week, evs] = [...byWeek].find(
+    ([, es]) => es.some((e) => e.category === 'other') && es.some((e) => e.category !== 'other'),
+  ); // a week with both kinds
   const counted = evs.filter((e) => e.category !== 'other').length;
   await open(page, 'claude-code/');
   await page.locator('#chart').scrollIntoViewIfNeeded();
   const { x, y, total } = await page.evaluate((week) => {
     const i = __chart.data.labels.indexOf(week);
     const box = __chart.canvas.getBoundingClientRect();
-    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, total: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]) };
+    return {
+      x: box.left + __chart.getDatasetMeta(0).data[i].x,
+      y: box.top + __chart.chartArea.bottom - 3,
+      total: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]),
+    };
   }, week);
   expect(total).toContain(` · ${counted} items`); // tooltip total matches the stack, not the stored row total
   await page.mouse.click(x, y);
@@ -325,31 +404,52 @@ test('the week list and tooltip total exclude set-aside items and label rows by 
   await expect(page.locator('#drill li .tag', { hasText: 'other' })).toHaveCount(0);
 });
 
-test('a finger drag over the chart does not move the tooltip; a tap picks the week, a second tap lists it', async ({ browser }) => {
+test('a finger drag over the chart does not move the tooltip; a tap picks the week, a second tap lists it', async ({
+  browser,
+}) => {
   const page = await (await browser.newContext({ hasTouch: true, viewport: { width: 375, height: 812 } })).newPage();
   await open(page, 'claude-code/');
   await page.locator('#chart').scrollIntoViewIfNeeded();
   const active = await page.evaluate(async () => {
-    const c = __chart.canvas; const box = c.getBoundingClientRect();
-    const at = (i) => ({ clientX: box.left + __chart.getDatasetMeta(0).data[i].x, clientY: box.top + __chart.chartArea.bottom - 3 });
-    for (const [type, i] of [['touchstart', 1], ['touchmove', 2], ['touchmove', 3]]) {
+    const c = __chart.canvas;
+    const box = c.getBoundingClientRect();
+    const at = (i) => ({
+      clientX: box.left + __chart.getDatasetMeta(0).data[i].x,
+      clientY: box.top + __chart.chartArea.bottom - 3,
+    });
+    for (const [type, i] of [
+      ['touchstart', 1],
+      ['touchmove', 2],
+      ['touchmove', 3],
+    ]) {
       const touch = new Touch({ identifier: 1, target: c, ...at(i) });
-      c.dispatchEvent(new TouchEvent(type, { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+      c.dispatchEvent(
+        new TouchEvent(type, { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }),
+      );
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 20))); // Chart.js handles moves on the next frame
     }
     return { n: __chart.getActiveElements().length, opacity: __chart.tooltip.opacity };
   });
   expect(active).toEqual({ n: 0, opacity: 0 });
   await expect(page.locator('#drill')).toBeHidden();
-  const { x, y } = await page.evaluate(() => { const box = __chart.canvas.getBoundingClientRect(); return { x: box.left + __chart.getDatasetMeta(0).data[2].x, y: box.top + __chart.chartArea.bottom - 3 }; });
-  await page.touchscreen.tap(x, y); await frame(page);
+  const { x, y } = await page.evaluate(() => {
+    const box = __chart.canvas.getBoundingClientRect();
+    return { x: box.left + __chart.getDatasetMeta(0).data[2].x, y: box.top + __chart.chartArea.bottom - 3 };
+  });
+  await page.touchscreen.tap(x, y);
+  await frame(page);
   await expect(page.locator('#drill')).toBeHidden(); // no hover: the first tap only shows the popover
-  expect(await page.evaluate(() => [__chart.tooltip.opacity, __chart.tooltip.footer])).toEqual([1, ['Tap again to list']]);
+  expect(await page.evaluate(() => [__chart.tooltip.opacity, __chart.tooltip.footer])).toEqual([
+    1,
+    ['Tap again to list'],
+  ]);
   await page.touchscreen.tap(x, y);
   await expect(page.locator('#drill')).toBeVisible();
-  await page.locator('#drill-close').tap(); await frame(page); // closing forgets the pick: the next tap reads again
+  await page.locator('#drill-close').tap();
+  await frame(page); // closing forgets the pick: the next tap reads again
   expect(await page.evaluate(() => __chart.$selected)).toBeNull();
-  await page.touchscreen.tap(x, y); await frame(page);
+  await page.touchscreen.tap(x, y);
+  await frame(page);
   await expect(page.locator('#drill')).toBeHidden();
 });
 
@@ -359,10 +459,15 @@ test('hovering a week with no items and no rolling share shows a tooltip without
   const { x, y, title } = await page.evaluate(() => {
     const i = __chart.data.labels.length - 1; // the fixture's last weeks are empty, so the rolling share is null there
     const box = __chart.canvas.getBoundingClientRect();
-    return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3, title: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]) };
+    return {
+      x: box.left + __chart.getDatasetMeta(0).data[i].x,
+      y: box.top + __chart.chartArea.bottom - 3,
+      title: __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: i }]),
+    };
   });
   expect(title).toMatch(/ · 0 commits so far$/);
-  await page.mouse.move(x, y); await frame(page);
+  await page.mouse.move(x, y);
+  await frame(page);
   expect(await page.evaluate(() => [__chart.tooltip.opacity, __chart.tooltip.title[0]])).toEqual([1, title]);
   expect(errors).toEqual([]);
 });
@@ -382,7 +487,9 @@ test('an old week across New Year names both years', async ({ page }) => {
     await route.fulfill({ response: res, json: [{ d: '2024-12-30', counts: {}, total: 0 }, ...(await res.json())] });
   });
   await open(page, 'claude-code/');
-  expect(await page.evaluate(() => __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: 0 }]))).toBe('Dec 30, 2024 – Jan 5, 2025 · 0 items');
+  expect(await page.evaluate(() => __chart.options.plugins.tooltip.callbacks.title([{ dataIndex: 0 }]))).toBe(
+    'Dec 30, 2024 – Jan 5, 2025 · 0 items',
+  );
 });
 
 test('fewer than four complete weeks: the note names the shorter window', async ({ page }) => {
@@ -403,7 +510,10 @@ test('resizing across the breakpoint pins the axes and scrolls to the latest wee
   await expect(page.locator('.axis-pin.left')).toBeHidden();
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.locator('.axis-pin.left')).toBeVisible();
-  const m = await page.evaluate(() => { const s = document.querySelector('.chart-scroll'); return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft }; });
+  const m = await page.evaluate(() => {
+    const s = document.querySelector('.chart-scroll');
+    return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft };
+  });
   expect(m.sw).toBeGreaterThan(m.cw);
   expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
   await expectPinned(page);
@@ -411,7 +521,7 @@ test('resizing across the breakpoint pins the axes and scrolls to the latest wee
   for (const pin of await page.locator('.axis-pin').all()) await expect(pin).toBeHidden();
 });
 
-test('commit size is the median over the window\'s sizes, compared with the prior window', async ({ page }) => {
+test("commit size is the median over the window's sizes, compared with the prior window", async ({ page }) => {
   await page.route('**/data/sparse/weekly.json', async (route) => {
     const rows = JSON.parse(readFileSync(join(out, 'data/sparse/weekly.json'), 'utf8'));
     for (const r of rows) {
@@ -428,17 +538,26 @@ test('commit size is the median over the window\'s sizes, compared with the prio
 
 // The panel's background as the canvas sees it, beside what the chart drew: the line's halo, a bar's gap edge and
 // the inside of a model-marker badge (left of its digit) should all be that colour.
-const colours = (page) => page.evaluate(() => {
-  const hex = (c) => { const g = document.createElement('canvas').getContext('2d'); g.fillStyle = c; return g.fillStyle; };
-  const halo = __chart.data.datasets.findIndex((d) => d.label === 'halo');
-  const [m] = __chart.$markers;
-  const r = __chart.currentDevicePixelRatio;
-  const px = __chart.ctx.getImageData(Math.round((m.x - 5) * r), Math.round(m.y * r), 1, 1).data;
-  return {
-    panel: hex(getComputedStyle(document.querySelector('.panel')).backgroundColor),
-    drawn: [hex(__chart.getDatasetMeta(halo).dataset.options.borderColor), hex(__chart.getDatasetMeta(0).data[0].options.borderColor), hex(`rgb(${px[0]},${px[1]},${px[2]})`)],
-  };
-});
+const colours = (page) =>
+  page.evaluate(() => {
+    const hex = (c) => {
+      const g = document.createElement('canvas').getContext('2d');
+      g.fillStyle = c;
+      return g.fillStyle;
+    };
+    const halo = __chart.data.datasets.findIndex((d) => d.label === 'halo');
+    const [m] = __chart.$markers;
+    const r = __chart.currentDevicePixelRatio;
+    const px = __chart.ctx.getImageData(Math.round((m.x - 5) * r), Math.round(m.y * r), 1, 1).data;
+    return {
+      panel: hex(getComputedStyle(document.querySelector('.panel')).backgroundColor),
+      drawn: [
+        hex(__chart.getDatasetMeta(halo).dataset.options.borderColor),
+        hex(__chart.getDatasetMeta(0).data[0].options.borderColor),
+        hex(`rgb(${px[0]},${px[1]},${px[2]})`),
+      ],
+    };
+  });
 const LIGHT = '#ffffff';
 const DARK = '#12151a';
 const painted = (panel) => ({ panel, drawn: [panel, panel, panel] });
@@ -449,40 +568,53 @@ test('the page and the chart follow the colour scheme, live, without a reload', 
   expect(await colours(page)).toEqual(painted(LIGHT));
   // The change event comes some frames later; a listener made after app.js's runs after it (creation order), so its
   // firing means the chart has already repainted.
-  const changed = page.evaluate(() => new Promise((r) => matchMedia('(prefers-color-scheme: dark)').addEventListener('change', r, { once: true })));
-  await page.emulateMedia({ colorScheme: 'dark' }); await changed;
+  const changed = page.evaluate(
+    () => new Promise((r) => matchMedia('(prefers-color-scheme: dark)').addEventListener('change', r, { once: true })),
+  );
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await changed;
   expect(await colours(page)).toEqual(painted(DARK));
 });
 
-test('the theme button cycles auto, light, dark; a forced theme beats the OS and survives a reload', async ({ browser }) => {
+test('the theme button cycles auto, light, dark; a forced theme beats the OS and survives a reload', async ({
+  browser,
+}) => {
   const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
   await open(page, 'claude-code/');
   const button = page.locator('#theme');
   await expect(button).toHaveAccessibleName(/^Theme: auto/i);
   expect(await colours(page)).toEqual(painted(LIGHT));
-  await button.click(); await frame(page);
+  await button.click();
+  await frame(page);
   await expect(button).toHaveAccessibleName(/^Theme: light/i);
   expect(await colours(page)).toEqual(painted(LIGHT));
-  await button.click(); await frame(page);
+  await button.click();
+  await frame(page);
   await expect(button).toHaveAccessibleName(/^Theme: dark/i);
   expect(await colours(page)).toEqual(painted(DARK)); // forced dark on a light OS
-  await page.reload(); await page.waitForFunction(() => window.__chart);
+  await page.reload();
+  await page.waitForFunction(() => window.__chart);
   await expect(button).toHaveAccessibleName(/^Theme: dark/i);
   expect(await colours(page)).toEqual(painted(DARK));
-  await button.click(); await frame(page); // back to auto: the OS (light) decides again, and nothing is stored
+  await button.click();
+  await frame(page); // back to auto: the OS (light) decides again, and nothing is stored
   await expect(button).toHaveAccessibleName(/^Theme: auto/i);
   expect(await colours(page)).toEqual(painted(LIGHT));
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /theme/.test(k)))).toEqual([]);
 });
 
-test('a stored theme applies from the page\'s own head, before app.js: on the root and on a project page', async ({ browser }) => {
+test("a stored theme applies from the page's own head, before app.js: on the root and on a project page", async ({
+  browser,
+}) => {
   for (const path of ['', 'claude-code/']) {
     const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
     await page.goto(`${base}claude-code/`);
     await page.evaluate(() => localStorage.setItem('codebase-trends:theme', 'dark'));
     await page.route('**/app.js*', (r) => r.abort()); // hold the page: no redirect, only its own head runs
     await page.goto(base + path);
-    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), path || 'root').toBe('rgb(13, 15, 18)');
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), path || 'root').toBe(
+      'rgb(13, 15, 18)',
+    );
     await page.context().close();
   }
 });
@@ -491,22 +623,38 @@ test('category tags in the week list keep their text readable (4.5:1) in both sc
   for (const colorScheme of ['light', 'dark']) {
     const page = await (await browser.newContext({ colorScheme })).newPage();
     const ratios = {};
-    for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) { // between them, one tag per bucket
+    for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) {
+      // between them, one tag per bucket
       await open(page, path);
       await expect(page.locator('#drill li.ev .tag').first()).toBeVisible();
-      Object.assign(ratios, await page.evaluate(() => {
-        // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
-        const rgb = (c) => { const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3); };
-        const lum = (c) => rgb(c).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
-        return Object.fromEntries([...document.querySelectorAll('#drill .tag')].map((t) => {
-          const s = getComputedStyle(t);
-          const [a, b] = [lum(s.backgroundColor), lum(s.color)].sort((x, y) => y - x);
-          return [t.textContent, Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100];
-        }));
-      }));
+      Object.assign(
+        ratios,
+        await page.evaluate(() => {
+          // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
+          const rgb = (c) => {
+            const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d');
+            g.fillStyle = c;
+            g.fillRect(0, 0, 1, 1);
+            return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3);
+          };
+          const lum = (c) =>
+            rgb(c)
+              .map((v) => v / 255)
+              .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+              .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+          return Object.fromEntries(
+            [...document.querySelectorAll('#drill .tag')].map((t) => {
+              const s = getComputedStyle(t);
+              const [a, b] = [lum(s.backgroundColor), lum(s.color)].sort((x, y) => y - x);
+              return [t.textContent, Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100];
+            }),
+          );
+        }),
+      );
     }
     expect(Object.keys(ratios).sort()).toEqual(['added', 'changed', 'fixed', 'revert']);
-    for (const [tag, ratio] of Object.entries(ratios)) expect(ratio, `${colorScheme} ${tag}`).toBeGreaterThanOrEqual(4.5);
+    for (const [tag, ratio] of Object.entries(ratios))
+      expect(ratio, `${colorScheme} ${tag}`).toBeGreaterThanOrEqual(4.5);
   }
 });
 
@@ -514,10 +662,23 @@ test('each KPI tile is its measure over the last 4 complete weeks against the 4 
   // Exactly 8 complete weeks and the current one: both windows full, the shortest history that has a prior period.
   const rows = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8')).slice(-9);
   const counts = (i) => (i < 4 ? { fixed: 1, changed: 1 } : i < 8 ? { added: 2, fixed: 1, changed: 1 } : {});
-  const weekly = rows.map((r, i) => ({ d: r.d, counts: counts(i), total: Object.values(counts(i)).reduce((a, b) => a + b, 0) }));
+  const weekly = rows.map((r, i) => ({
+    d: r.d,
+    counts: counts(i),
+    total: Object.values(counts(i)).reduce((a, b) => a + b, 0),
+  }));
   // Versions: 2 in the prior weeks (08-17 – 09-13), 6 in the last (09-14 – 10-11), 1 in the current week (not in either).
-  const releases = ['2026-08-18', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-22', '2026-09-29', '2026-10-06', '2026-10-11', '2026-10-13']
-    .map((d, i) => ({ version: `9.9.${i}`, ts: `${d}T12:00:00.000Z`, count: 1 }));
+  const releases = [
+    '2026-08-18',
+    '2026-09-13',
+    '2026-09-14',
+    '2026-09-15',
+    '2026-09-22',
+    '2026-09-29',
+    '2026-10-06',
+    '2026-10-11',
+    '2026-10-13',
+  ].map((d, i) => ({ version: `9.9.${i}`, ts: `${d}T12:00:00.000Z`, count: 1 }));
   await page.route('**/data/claude-code/weekly.json', (route) => route.fulfill({ json: weekly }));
   await page.route('**/data/claude-code/releases.json', (route) => route.fulfill({ json: releases }));
   await open(page, 'claude-code/');
@@ -531,9 +692,13 @@ test('each KPI tile is its measure over the last 4 complete weeks against the 4 
   ]);
 });
 
-test('a first visit sees one question; the (i) button and every label open the help dialog, labels at their definition', async ({ page }) => {
+test('a first visit sees one question; the (i) button and every label open the help dialog, labels at their definition', async ({
+  page,
+}) => {
   await open(page, 'claude-code/');
-  await expect(page.locator('#lede')).toHaveText("How much of Claude Code's work each week is new capability, and how much is correction?");
+  await expect(page.locator('#lede')).toHaveText(
+    "How much of Claude Code's work each week is new capability, and how much is correction?",
+  );
   await expect(page.locator('.notes, sup.fn, .kpi .cap')).toHaveCount(0); // no footnotes, superscripts or captions in the default view
   const help = page.locator('#help');
   await expect(help).toHaveJSProperty('open', false);
@@ -543,7 +708,9 @@ test('a first visit sees one question; the (i) button and every label open the h
   await label.click();
   await expect(help).toHaveJSProperty('open', true);
   await expect(page.locator('#fn-fix')).toBeInViewport();
-  expect(await page.locator('#fn-fix').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)'); // the jumped-to entry is tinted, not just renamed
+  expect(await page.locator('#fn-fix').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe(
+    'rgba(0, 0, 0, 0)',
+  ); // the jumped-to entry is tinted, not just renamed
   await page.keyboard.press('Escape');
   await expect(help).toHaveJSProperty('open', false);
   await expect.poll(() => new URL(page.url()).hash).toBe(''); // closing forgets the entry (the dialog's close event is a task after it closes), so the next open starts at the top
@@ -557,16 +724,22 @@ test('a first visit sees one question; the (i) button and every label open the h
   await expect(help).toHaveJSProperty('open', false);
   await expect(help.locator('a[href^="http"]')).toHaveCount(1); // the source; the repo link is the GitHub icon beside the (i)
   await expect(page.locator('#repo')).toHaveAttribute('href', 'https://github.com/unrarp/codebase-trends');
-  await expect(help.locator('a[href="https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md"]')).toHaveText('CHANGELOG.md');
+  await expect(
+    help.locator('a[href="https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md"]'),
+  ).toHaveText('CHANGELOG.md');
   await open(page, 'sparse/#fn-lines'); // a deep link: the entry is built after the page's own fragment jump
   await expect(page.locator('#help')).toHaveJSProperty('open', true);
   await expect(page.locator('#fn-lines')).toBeInViewport();
-  expect(await page.locator('#fn-lines').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  expect(await page.locator('#fn-lines').evaluate((d) => getComputedStyle(d).backgroundColor)).not.toBe(
+    'rgba(0, 0, 0, 0)',
+  );
   await expect(page.locator('#lede')).toContainText("Sparse's work");
   await expect(page.locator('#help a[href^="http"]')).toHaveCount(0); // no source configured
 });
 
-test('a term link leaves a day deep link alone: the list stays open and the URL keeps the day after the dialog closes', async ({ page }) => {
+test('a term link leaves a day deep link alone: the list stays open and the URL keeps the day after the dialog closes', async ({
+  page,
+}) => {
   await open(page, 'sparse/#2026-08-21');
   await page.locator('#kpis .kpi .k a.term').first().click();
   await expect(page.locator('#help')).toHaveJSProperty('open', true);
@@ -576,7 +749,7 @@ test('a term link leaves a day deep link alone: the list stays open and the URL 
   await expect(page.locator('#drill')).toBeVisible();
 });
 
-test('a bot commit carries a bot badge in the list, a person\'s does not', async ({ page }) => {
+test("a bot commit carries a bot badge in the list, a person's does not", async ({ page }) => {
   await open(page, 'sparse/#2026-08-21'); // d4: carol, co-authored by ci[bot]
   await expect(page.locator('#drill li.ev')).toHaveCount(1);
   await expect(page.locator('#drill li.ev .badge')).toHaveText('bot');

@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { CATEGORIES, COUNTED, classifyByRule } from './classify.js';
 import { readJsonl } from './store.js';
-import { classifyByRule, CATEGORIES, COUNTED } from './classify.js';
 
 /*
  * Output under docs/data/ (validate.js checks the invariants):
@@ -47,7 +47,10 @@ export function isBot(event, project) {
 
 const fill = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
 const rows = (arr) => (arr.length ? `[\n${arr.map((r) => JSON.stringify(r)).join(',\n')}\n]\n` : '[]\n');
-const write = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
+const write = (path, text) => {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text);
+};
 const json = (path, v) => write(path, `${JSON.stringify(v, null, 2)}\n`);
 const readJson = (path, fallback) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : fallback);
 
@@ -81,7 +84,12 @@ function deriveEvents(project, root) {
 
 function aggregate(events, project, keyOf, keys, { lines = false } = {}) {
   const cats = CATEGORIES[project.basis];
-  const by = new Map(keys.map((k) => [k, { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: [] } : {}) }]));
+  const by = new Map(
+    keys.map((k) => [
+      k,
+      { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: [] } : {}) },
+    ]),
+  );
   for (const e of events) {
     const r = by.get(keyOf(e.ts.slice(0, 10)));
     r.counts[e.category]++;
@@ -107,16 +115,27 @@ function buildProject(project, root, out, generatedAt) {
   const totals = {
     events: events.length,
     byCategory: Object.fromEntries(cats.map((c) => [c, events.filter((e) => e.category === c).length])),
-    bySource: Object.fromEntries(['rule', 'model', 'pending'].map((s) => [s, events.filter((e) => e.source === s).length])),
+    bySource: Object.fromEntries(
+      ['rule', 'model', 'pending'].map((s) => [s, events.filter((e) => e.source === s).length]),
+    ),
   };
   const releases = [];
   if (project.basis === 'changelog') {
     const byVersion = new Map();
-    for (const e of events) byVersion.set(e.version, { version: e.version, ts: e.ts, count: (byVersion.get(e.version)?.count ?? 0) + 1 });
+    for (const e of events)
+      byVersion.set(e.version, { version: e.version, ts: e.ts, count: (byVersion.get(e.version)?.count ?? 0) + 1 });
     releases.push(...byVersion.values());
     totals.versions = releases.length;
   }
-  json(join(od, 'summary.json'), { project: project.id, name: project.name, basis: project.basis, generatedAt, firstDate, lastDate, totals });
+  json(join(od, 'summary.json'), {
+    project: project.id,
+    name: project.name,
+    basis: project.basis,
+    generatedAt,
+    firstDate,
+    lastDate,
+    totals,
+  });
   write(join(od, 'daily.json'), rows(daily));
   write(join(od, 'weekly.json'), rows(weekly));
   if (project.basis === 'changelog') write(join(od, 'releases.json'), rows(releases));
@@ -129,24 +148,50 @@ function buildProject(project, root, out, generatedAt) {
 export function build({ root = REPO, out = join(root, 'docs'), now = new Date() } = {}) {
   const generatedAt = new Date(now).toISOString();
   const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
-  json(join(out, 'data', 'projects.json'), projects.map((p) => {
-    const source = p.sources?.changelog ?? p.sources?.git?.repo;
-    return { id: p.id, name: p.name, basis: p.basis, annotations: p.annotations ?? [], links: p.links ?? {}, ...(source ? { source } : {}) };
-  }));
+  json(
+    join(out, 'data', 'projects.json'),
+    projects.map((p) => {
+      const source = p.sources?.changelog ?? p.sources?.git?.repo;
+      return {
+        id: p.id,
+        name: p.name,
+        basis: p.basis,
+        annotations: p.annotations ?? [],
+        links: p.links ?? {},
+        ...(source ? { source } : {}),
+      };
+    }),
+  );
   write(join(out, 'data', 'annotations.json'), rows(readJson(join(root, 'annotations.json'), [])));
   for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
-  if (resolve(out) !== resolve(REPO, 'docs')) write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
+  if (resolve(out) !== resolve(REPO, 'docs'))
+    write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
   // Pages caches assets for ten minutes and browsers longer, while the HTML is fetched fresh: an asset URL that
   // carries its content hash makes a changed script or stylesheet load with the page instead of after the cache.
-  const hashes = new Map(['app.js', 'app.css', 'vendor/chart.umd.js'].filter((f) => existsSync(join(out, f)))
-    .map((f) => [f, createHash('sha256').update(readFileSync(join(out, f))).digest('hex').slice(0, 8)]));
-  const assets = new RegExp(`(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`, 'g');
+  const hashes = new Map(
+    ['app.js', 'app.css', 'vendor/chart.umd.js']
+      .filter((f) => existsSync(join(out, f)))
+      .map((f) => [
+        f,
+        createHash('sha256')
+          .update(readFileSync(join(out, f)))
+          .digest('hex')
+          .slice(0, 8),
+      ]),
+  );
+  const assets = new RegExp(
+    `(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`,
+    'g',
+  );
   const stamp = (html) => html.replace(assets, (_m, attr, rel, f) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
   write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8')));
   const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'));
   for (const p of projects) {
     buildProject(p, root, out, generatedAt);
-    write(join(out, p.id, 'index.html'), page.replace(/\{\{(\w+)\}\}/g, (m, k) => p[k] ?? m));
+    write(
+      join(out, p.id, 'index.html'),
+      page.replace(/\{\{(\w+)\}\}/g, (m, k) => p[k] ?? m),
+    );
   }
 }
 
