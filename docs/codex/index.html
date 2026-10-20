@@ -6,10 +6,11 @@
 <title>Codex · codebase-trends</title>
 <!-- A theme picked with the button (app.js) applies before the first paint; without one, the OS decides. -->
 <script>try { const t = localStorage.getItem('codebase-trends:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
-<link rel="stylesheet" href="../app.css?v=7c13cd90">
+<link rel="stylesheet" href="../app.css?v=f0d8ee73">
 </head>
 <body data-project="codex" data-basis="commits">
 <main class="wrap">
+  <!-- biome-ignore lint/a11y/useAnchorContent: the repo link is named by aria-label; its only child is a decorative icon -->
   <p class="crumb">codebase-trends / <select id="switch" aria-label="Project"><option>Codex</option></select><button id="info" class="btn info" type="button" title="How to read this page" aria-label="How to read this page">i</button><a id="repo" class="btn repo" href="https://github.com/unrarp/codebase-trends" target="_blank" rel="noopener" title="Code and data on GitHub" aria-label="Code and data on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a><button id="theme" class="btn theme" type="button"></button></p>
   <header class="head">
     <h1>Codex</h1>
@@ -20,6 +21,7 @@
     <div id="kpis" class="kpis"></div>
   </section>
   <section class="panel">
+    <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
     <h2 id="title"></h2>
     <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
@@ -31,6 +33,7 @@
   </section>
   <section id="drill" class="panel" hidden>
     <div class="panel-head">
+      <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
       <h2 id="drill-title"></h2>
       <button id="drill-close" class="btn" type="button">Close</button>
     </div>
@@ -53,6 +56,6 @@
   </div>
 </dialog>
 <script src="../vendor/chart.umd.js?v=ecc3cd1e"></script>
-<script src="../app.js?v=71f1e18a" defer></script>
+<script src="../app.js?v=7055e54f" defer></script>
 </body>
 </html>

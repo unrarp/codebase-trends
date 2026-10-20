@@ -2,110 +2,483 @@
    the chart paints through css(), so the canvas follows too; the bucket colours in GROUPS pass on both surfaces. */
 :root {
   color-scheme: light dark;
-  --bg: light-dark(#f6f7f9, #0d0f12); --panel: light-dark(#ffffff, #12151a); --line: light-dark(#dfe2e6, #23272e);
-  --text: light-dark(#16191d, #e8eaed); --muted: light-dark(#5f6670, #8b919a); --link: light-dark(#1f63c6, #7db4ff);
-  --accent: light-dark(#c2410c, #e8702a); --marker: light-dark(#b45309, #f0932b);
+  --bg: light-dark(#f6f7f9, #0d0f12);
+  --panel: light-dark(#ffffff, #12151a);
+  --line: light-dark(#dfe2e6, #23272e);
+  --text: light-dark(#16191d, #e8eaed);
+  --muted: light-dark(#5f6670, #8b919a);
+  --link: light-dark(#1f63c6, #7db4ff);
+  --accent: light-dark(#c2410c, #e8702a);
+  --marker: light-dark(#b45309, #f0932b);
   /* canvas only: grid lines, the not-yet-collected hatch, the picked week, the tooltip */
-  --grid: light-dark(#eceef1, #1b1f25); --hatch: light-dark(rgba(0,0,0,.16), rgba(255,255,255,.22)); --pick: light-dark(rgba(22,25,29,.07), rgba(232,234,237,.1));
-  --tip-bg: light-dark(rgba(255,255,255,.97), rgba(13,15,18,.96)); --tip-line: light-dark(#dfe2e6, #2b3038); --tip-text: light-dark(#16191d, #ffffff);
+  --grid: light-dark(#eceef1, #1b1f25);
+  --hatch: light-dark(rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.22));
+  --pick: light-dark(rgba(22, 25, 29, 0.07), rgba(232, 234, 237, 0.1));
+  --tip-bg: light-dark(rgba(255, 255, 255, 0.97), rgba(13, 15, 18, 0.96));
+  --tip-line: light-dark(#dfe2e6, #2b3038);
+  --tip-text: light-dark(#16191d, #ffffff);
 }
-:root[data-theme="light"] { color-scheme: light; } /* set by the theme button; absent means the OS decides */
-:root[data-theme="dark"] { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-a { color: var(--link); }
-button { font: inherit; color: inherit; cursor: pointer; }
-.wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
-.crumb { color: var(--muted); margin: 0 0 12px; display: flex; align-items: center; gap: 6px; }
-.theme, .info, .repo { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; text-decoration: none; } /* the icon is the label; its name is in aria-label */
-.repo svg { width: 16px; height: 16px; fill: currentColor; }
-.info { margin-left: auto; width: 30px; border-radius: 50%; font: italic 600 14px/1 Georgia, "Times New Roman", serif; }
-.crumb select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
-.head { margin: 0 0 14px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; min-width: 0; }
-.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
-h1 { font-size: 20px; margin: 0 0 4px; }
-.lede { margin: 0 0 6px; max-width: 72ch; }
-h2 { font-size: 16px; margin: 0; }
-.sub, .meta, .footnote { color: var(--muted); margin: 4px 0; }
-.footnote { font-size: 12px; }
+:root[data-theme="light"] {
+  color-scheme: light;
+} /* set by the theme button; absent means the OS decides */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px / 1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+a {
+  color: var(--link);
+}
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.crumb {
+  color: var(--muted);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.theme,
+.info,
+.repo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  text-decoration: none;
+} /* the icon is the label; its name is in aria-label */
+.repo svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+.info {
+  margin-left: auto;
+  width: 30px;
+  border-radius: 50%;
+  font:
+    italic 600 14px / 1 Georgia,
+    "Times New Roman",
+    serif;
+}
+.crumb select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 8px;
+}
+.head {
+  margin: 0 0 14px;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+  align-items: center;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+.lede {
+  margin: 0 0 6px;
+  max-width: 72ch;
+}
+h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.sub,
+.meta,
+.footnote {
+  color: var(--muted);
+  margin: 4px 0;
+}
+.footnote {
+  font-size: 12px;
+}
 
-.kpi-block { margin-bottom: 16px; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
-.kpi .k { color: var(--muted); font-size: 12px; }
-.kpi .v { font-size: 26px; font-weight: 600; line-height: 1.2; margin: 4px 0 2px; }
-.kpi .ref { color: var(--muted); font-size: 12px; }
-.kpi .ref b { color: var(--text); font-weight: 600; }
-a.term { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; } /* a label with a definition behind it */
+.kpi-block {
+  margin-bottom: 16px;
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+.kpi .k {
+  color: var(--muted);
+  font-size: 12px;
+}
+.kpi .v {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 4px 0 2px;
+}
+.kpi .ref {
+  color: var(--muted);
+  font-size: 12px;
+}
+.kpi .ref b {
+  color: var(--text);
+  font-weight: 600;
+}
+a.term {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 3px;
+} /* a label with a definition behind it */
 
-.legend, .chips { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0; }
-.legend > * { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
-.legend > [hidden] { display: none; }
-.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
-.sw.line { width: 14px; height: 0; border-top: 2px solid var(--accent); border-radius: 0; }
-.sw.marker { width: 0; height: 12px; border-left: 2px dashed var(--marker); border-radius: 0; }
-.sw.hatch { width: 14px; height: 12px; background: repeating-linear-gradient(135deg, light-dark(#9aa0a8, #6b727c) 0 1px, transparent 1px 4px); border: 1px solid light-dark(#c9cdd3, #3a3f47); }
-.chart-frame { position: relative; }
-.chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
-.axis-pin { position: absolute; top: 4px; pointer-events: none; } /* top: the chart-wrap margin; touches fall through to the chart, so a swipe on an axis scrolls it */
-.axis-pin.left { left: 0; }
-.axis-pin.right { right: 0; }
-.chart-wrap { position: relative; width: 100%; height: clamp(300px, 46vh, 520px); margin-top: 4px; }
-.chips { margin: 14px 0 0; }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-size: 12px; max-width: 100%; }
-.chip .n { color: var(--marker); font-weight: 600; }
-.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--marker); flex: none; }
+.legend,
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin: 10px 0;
+}
+.legend > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.legend > [hidden] {
+  display: none;
+}
+.sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  flex: none;
+}
+.sw.line {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  border-radius: 0;
+}
+.sw.marker {
+  width: 0;
+  height: 12px;
+  border-left: 2px dashed var(--marker);
+  border-radius: 0;
+}
+.sw.hatch {
+  width: 14px;
+  height: 12px;
+  background: repeating-linear-gradient(135deg, light-dark(#9aa0a8, #6b727c) 0 1px, transparent 1px 4px);
+  border: 1px solid light-dark(#c9cdd3, #3a3f47);
+}
+.chart-frame {
+  position: relative;
+}
+.chart-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.axis-pin {
+  position: absolute;
+  top: 4px;
+  pointer-events: none;
+} /* top: the chart-wrap margin; touches fall through to the chart, so a swipe on an axis scrolls it */
+.axis-pin.left {
+  left: 0;
+}
+.axis-pin.right {
+  right: 0;
+}
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  height: clamp(300px, 46vh, 520px);
+  margin-top: 4px;
+}
+.chips {
+  margin: 14px 0 0;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  max-width: 100%;
+}
+.chip .n {
+  color: var(--marker);
+  font-weight: 600;
+}
+.chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--marker);
+  flex: none;
+}
 
 /* The help dialog: a panel over the page, a full-height sheet on a phone. */
-.help { width: min(640px, calc(100% - 32px)); max-height: 85vh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); overflow: auto; }
-.help::backdrop { background: light-dark(rgba(0, 0, 0, .35), rgba(0, 0, 0, .6)); }
-.help-body { padding: 0 20px 18px; }
-.help .panel-head { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 18px 0 10px; } /* Close stays reachable while the body scrolls */
-.help h3 { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }
-.help dl, .help p { color: var(--muted); margin: 0; max-width: 72ch; }
-.help dt, .help b { color: var(--text); font-weight: 500; }
-.help p { margin-top: 8px; }
-.help dd { margin: 0; }
+.help {
+  width: min(640px, calc(100% - 32px));
+  max-height: 85vh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  overflow: auto;
+}
+.help::backdrop {
+  background: light-dark(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.6));
+}
+.help-body {
+  padding: 0 20px 18px;
+}
+.help .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  padding: 18px 0 10px;
+} /* Close stays reachable while the body scrolls */
+.help h3 {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 16px 0 2px;
+}
+.help dl,
+.help p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 72ch;
+}
+.help dt,
+/* biome-ignore lint/style/noDescendingSpecificity: .kpi and .help never nest, so .kpi .ref b cannot compete */
+.help b {
+  color: var(--text);
+  font-weight: 500;
+}
+.help p {
+  margin-top: 8px;
+}
+.help dd {
+  margin: 0;
+}
 /* One entry per definition; the one just jumped to is tinted and barred in the accent, so the eye lands on it. */
-.help dl > div { padding: 5px 10px; margin: 2px -10px 0; border-left: 3px solid transparent; border-radius: 6px; scroll-margin-top: 12px; }
-.help dl > div.current { border-left-color: var(--accent); background: light-dark(color-mix(in srgb, var(--accent) 9%, var(--panel)), color-mix(in srgb, var(--accent) 16%, var(--panel))); }
-.help dl > div.current dt { color: var(--accent); }
-.btn { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font-size: 12px; line-height: 1.5; color: var(--muted); } /* quiet: the title is the thing */
-.btn:hover { color: var(--text); }
+.help dl > div {
+  padding: 5px 10px;
+  margin: 2px -10px 0;
+  border-left: 3px solid transparent;
+  border-radius: 6px;
+  scroll-margin-top: 12px;
+}
+.help dl > div.current {
+  border-left-color: var(--accent);
+  background: light-dark(
+    color-mix(in srgb, var(--accent) 9%, var(--panel)),
+    color-mix(in srgb, var(--accent) 16%, var(--panel))
+  );
+}
+.help dl > div.current dt {
+  color: var(--accent);
+}
+.btn {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+} /* quiet: the title is the thing */
+.btn:hover {
+  color: var(--text);
+}
 /* The week's list: a header per group (day or version), one line per item, capped so a 500-item week scrolls here, not the page. */
-.drill-list { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; margin-top: 10px; }
-.drill-list h3 { position: sticky; top: 0; z-index: 1; background: var(--panel); font-size: 13px; font-weight: 500; margin: 0; padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
-.drill-list ul { list-style: none; margin: 0; padding: 0; }
-.ev { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.ev .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.ev .ref { flex: none; font-size: 12px; font-family: ui-monospace, monospace; }
-.tag { flex: none; display: inline-block; min-width: 64px; text-align: center; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+.drill-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-top: 10px;
+}
+.drill-list h3 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0;
+  padding: 10px 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+.drill-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ev {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ev .text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ev .ref {
+  flex: none;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
+.tag {
+  flex: none;
+  display: inline-block;
+  min-width: 64px;
+  text-align: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
   /* --c is the bucket colour: a tint of it on the panel, its text darkened (light) or lightened (dark), >= 4.5:1 as the
      browser test pins. No single text colour reads on all four solid fills. */
-  background: light-dark(color-mix(in srgb, var(--c) 16%, var(--panel)), color-mix(in srgb, var(--c) 20%, var(--panel)));
-  color: light-dark(color-mix(in oklab, var(--c) 70%, #000), color-mix(in oklab, var(--c) 60%, #fff)); }
-.badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+  background: light-dark(
+    color-mix(in srgb, var(--c) 16%, var(--panel)),
+    color-mix(in srgb, var(--c) 20%, var(--panel))
+  );
+  color: light-dark(color-mix(in oklab, var(--c) 70%, #000), color-mix(in oklab, var(--c) 60%, #fff));
+}
+.badge {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
 
 /* In-page moves (opening the list, note links) scroll smoothly and the list eases in, unless the user asked for less motion. */
 @media (prefers-reduced-motion: no-preference) {
-  html { scroll-behavior: smooth; }
-  #drill { transition: opacity .25s ease-out, translate .25s ease-out; }
-  @starting-style { #drill { opacity: 0; translate: 0 10px; } }
+  html {
+    scroll-behavior: smooth;
+  }
+  #drill {
+    transition:
+      opacity 0.25s ease-out,
+      translate 0.25s ease-out;
+  }
+  @starting-style {
+    #drill {
+      opacity: 0;
+      translate: 0 10px;
+    }
+  }
 }
 
 @media (max-width: 719px) {
-  .wrap { padding: 8px; }
-  .panel, .kpi { padding: 14px 12px; }
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi .v { font-size: 22px; }
-  .crumb { white-space: nowrap; } /* three icon buttons and the switcher fit one line at 375px only if the name does not wrap */
-  .crumb select { flex: 1; min-width: 0; }
-  .crumb select, .theme, .info, .repo { min-height: 44px; }
-  .theme, .info, .repo { min-width: 40px; padding: 6px 4px; }
-  .help { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; } /* the browser's own sheet caps a dialog at calc(100% - 6px - 2em) wide: without max-width: none a strip of page shows on the right */
-  .chip .date { display: none; }
-  .chip { padding: 3px 8px; }
-  .ev { flex-wrap: wrap; gap: 4px 8px; }
-  .ev .text { flex-basis: 100%; order: 1; }
+  .wrap {
+    padding: 8px;
+  }
+  .panel,
+  .kpi {
+    padding: 14px 12px;
+  }
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kpi .v {
+    font-size: 22px;
+  }
+  .crumb {
+    white-space: nowrap;
+  } /* three icon buttons and the switcher fit one line at 375px only if the name does not wrap */
+  .crumb select {
+    flex: 1;
+    min-width: 0;
+  }
+  .crumb select,
+  .theme,
+  .info,
+  .repo {
+    min-height: 44px;
+  }
+  .theme,
+  .info,
+  .repo {
+    min-width: 40px;
+    padding: 6px 4px;
+  }
+  .help {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  } /* the browser's own sheet caps a dialog at calc(100% - 6px - 2em) wide: without max-width: none a strip of page shows on the right */
+  .chip .date {
+    display: none;
+  }
+  .chip {
+    padding: 3px 8px;
+  }
+  .ev {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .ev .text {
+    flex-basis: 100%;
+    order: 1;
+  }
 }
