@@ -12,7 +12,7 @@ function firstWordCategory(text, map) {
 }
 
 // A short "Scope:" lead-in, e.g. "Windows: Fixed …", "Self-hosted runner: Added …".
-const SCOPE = /^[A-Za-z][\w .\/-]{0,30}:\s+/;
+const SCOPE = /^[A-Za-z][\w ./-]{0,30}:\s+/;
 
 function changelogRule(event) {
   return firstWordCategory(event.text, SYNONYMS) ?? firstWordCategory(event.text.replace(SCOPE, ''), SYNONYMS);

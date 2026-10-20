@@ -7,12 +7,12 @@ import { tmp } from './tmp.js';
 
 test('backfill adds stats to commit events that lack them, keeps order, bytes and existing stats', () => {
   const path = join(tmp('ct-backfill-'), 'events.jsonl');
-  const before = [
+  const before = `${[
     '{"id":"a","kind":"commit","sha":"a","text":"x"}',
     '{"id":"b","kind":"commit","sha":"b","text":"y","stats":{"add":9,"del":9,"files":9}}',
     '{"id":"c","kind":"commit","sha":"c","text":"z"}',
     '{"id":"v1#0","kind":"changelog","version":"1","text":"w"}',
-  ].join('\n') + '\n';
+  ].join('\n')}\n`;
   writeFileSync(path, before);
   const asked = [];
   const repo = { numstat: (shas) => { asked.push(...shas); return new Map([['a', { add: 1, del: 2, files: 1 }]]); } };

@@ -141,7 +141,7 @@ export function build({ root = REPO, out = join(root, 'docs'), now = new Date() 
   const hashes = new Map(['app.js', 'app.css', 'vendor/chart.umd.js'].filter((f) => existsSync(join(out, f)))
     .map((f) => [f, createHash('sha256').update(readFileSync(join(out, f))).digest('hex').slice(0, 8)]));
   const assets = new RegExp(`(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`, 'g');
-  const stamp = (html) => html.replace(assets, (m, attr, rel, f) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
+  const stamp = (html) => html.replace(assets, (_m, attr, rel, f) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
   write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8')));
   const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'));
   for (const p of projects) {

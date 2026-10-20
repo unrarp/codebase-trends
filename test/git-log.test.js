@@ -121,7 +121,7 @@ test('openRepo.numstat runs against a real repo, including a merge measured agai
 test('collect asks the repo for the stats of new shas only and stores them on the events', async () => {
   const asked = [];
   const sizes = new Map([['d578f574e565ca740729abb6c7c1f6a3f02f11b1', { add: 1, del: 2, files: 3 }]]);
-  const fetchRaw = async (git, from, use) => use({ log: () => raw, numstat: (shas) => { asked.push(...shas); return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)])); } });
+  const fetchRaw = async (_git, _from, use) => use({ log: () => raw, numstat: (shas) => { asked.push(...shas); return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)])); } });
   const all = await collectGitLog(project, [], fetchRaw);
   assert.equal(all.length, 3);
   assert.deepEqual(asked.sort(), all.map((e) => e.sha).sort());

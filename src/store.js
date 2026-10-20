@@ -17,5 +17,5 @@ export function readJsonl(path) {
 export function appendJsonl(path, rows) {
   if (!rows.length) return;
   mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, rows.map((r) => JSON.stringify(r) + '\n').join(''));
+  appendFileSync(path, rows.map((r) => `${JSON.stringify(r)}\n`).join(''));
 }

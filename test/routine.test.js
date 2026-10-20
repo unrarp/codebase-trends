@@ -9,7 +9,7 @@ import { tmp } from './tmp.js';
 
 const projects = [{ id: 'p', basis: 'changelog' }, { id: 'q', basis: 'changelog' }, { id: 'r', basis: 'changelog' }];
 const H = (n) => String(n).padStart(16, '0');
-const eventLines = (hs) => hs.map((h) => JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` }) + '\n').join(''); // 't1' has no rule
+const eventLines = (hs) => hs.map((h) => `${JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` })}\n`).join(''); // 't1' has no rule
 
 function dataTree(pendingByProject) {
   const root = tmp('routine-');
@@ -92,7 +92,7 @@ test('buildIfChanged: an unchanged build keeps the committed generatedAt and rep
   assert.equal(buildIfChanged({ root, now: new Date(T1) }), false);
   assert.equal(generatedAt(), T0); // the site still says T0: nothing new to publish
   assert.equal(git('status', '--porcelain', '--', 'data', 'docs').trim(), '');
-  appendFileSync(join(root, 'data', 'sparse', 'events.jsonl'), JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] }) + '\n');
+  appendFileSync(join(root, 'data', 'sparse', 'events.jsonl'), `${JSON.stringify({ id: 'x', textHash: '0000000000000000', project: 'sparse', kind: 'commit', sha: 'x', ts: '2026-10-13T10:00:00Z', text: 'feat: x', tags: [] })}\n`);
   assert.equal(buildIfChanged({ root, now: new Date(T1) }), true);
   assert.equal(generatedAt(), T1);
 });
@@ -111,7 +111,7 @@ function routineRepo() {
   git('remote', 'add', 'origin', remote);
   const calls = [];
   const collected = [];
-  const deps = { root, collect: async (projects, opts) => { calls.push('collect'); collected.push(opts); }, check: () => { calls.push('check'); }, ping: async () => { calls.push('ping'); } };
+  const deps = { root, collect: async (_projects, opts) => { calls.push('collect'); collected.push(opts); }, check: () => { calls.push('check'); }, ping: async () => { calls.push('ping'); } };
   const origin = (...a) => execFileSync('git', ['--git-dir', remote, ...a], { encoding: 'utf8' }).trim();
   return { root, git, origin, calls, collected, deps };
 }

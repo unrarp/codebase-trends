@@ -3,8 +3,8 @@
 - **Every tracked file is public** — the repo is public and `docs/` is served at
   `unrarp.github.io/codebase-trends/`. No tokens, no `.env`, nothing private.
 - **Zero runtime dependencies, plain ESM JavaScript, Node ≥ 22, `node --test`.**
-  Playwright is the only devDependency. No TypeScript, bundler, Bun (cloud
-  sessions cannot `bun install`) or GitHub Actions.
+  Playwright and Biome are the only devDependencies. No TypeScript, bundler,
+  Bun (cloud sessions cannot `bun install`) or GitHub Actions.
 - **`data/` and `docs/` (except `docs/vendor/`) are machine-written** by
   `src/collect.js`, `src/build.js`, `scripts/classify-local.sh` and the routine.
   Never hand-edit them.

@@ -222,7 +222,10 @@ for (const [name, viewport] of [['desktop 1280x800', { width: 1280, height: 800 
       const want = weekly.map((_, i) => pooled(weekly.slice(Math.max(0, i - 3), i + 1)));
       expect(fix.v.length).toBe(want.length);
       expect(want.filter((v) => v !== null && v !== 0).length).toBeGreaterThan(0); // the fixture has weeks where the denominator matters
-      want.forEach((w, i) => (w === null ? expect(fix.v[i]).toBeNull() : expect(fix.v[i]).toBeCloseTo(w, 10)));
+      want.forEach((w, i) => {
+        if (w === null) expect(fix.v[i]).toBeNull();
+        else expect(fix.v[i]).toBeCloseTo(w, 10);
+      });
     });
 
     test('narrow screens scroll the chart to the latest week with both axes pinned in view', async ({ page }) => {
@@ -302,7 +305,7 @@ test('a category outside the four buckets is not drawn and not counted, and the 
 });
 
 test('the week list and tooltip total exclude set-aside items and label rows by stored category', async ({ page }) => {
-  const months = readdirSync(join(out, 'data/claude-code/months')).map((f) => JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8'))).flat();
+  const months = readdirSync(join(out, 'data/claude-code/months')).flatMap((f) => JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8')));
   const monday = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10); };
   const byWeek = Map.groupBy(months, (e) => monday(e.ts.slice(0, 10)));
   const [week, evs] = [...byWeek].find(([, es]) => es.some((e) => e.category === 'other') && es.some((e) => e.category !== 'other')); // a week with both kinds

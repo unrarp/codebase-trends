@@ -64,6 +64,7 @@ a.term { color: inherit; text-decoration: underline dotted; text-decoration-colo
 .help .panel-head { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 18px 0 10px; } /* Close stays reachable while the body scrolls */
 .help h3 { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }
 .help dl, .help p { color: var(--muted); margin: 0; max-width: 72ch; }
+/* biome-ignore lint/style/noDescendingSpecificity: .kpi and .help never nest, so .kpi .ref b cannot compete */
 .help dt, .help b { color: var(--text); font-weight: 500; }
 .help p { margin-top: 8px; }
 .help dd { margin: 0; }

@@ -103,17 +103,18 @@ npx playwright install chromium   # once, for the browser test
 git config core.hooksPath hooks   # runs `npm run check` before every push
 ```
 
-Zero runtime dependencies, plain ESM, Node ≥ 22; Playwright is the only
-devDependency.
+Zero runtime dependencies, plain ESM, Node ≥ 22; Playwright and Biome are the
+only devDependencies.
 
 | script | runs | where |
 |---|---|---|
 | `npm test` | `node --test 'test/**/*.test.js'` | everywhere |
 | `npm run check:syntax` | `node --check` over `src/` and `scripts/` | everywhere |
 | `npm run check:data` | `node src/validate.js` over `docs/` | everywhere |
+| `npm run check:lint` | Biome lint with its recommended rules (`biome.json`) | local only |
 | `npm run check:browser` | Playwright smoke test at 1280×800 and 375×812 | local only |
 | `npm run check:core` | test + check:syntax + check:data | routine, before every commit |
-| `npm run check` | check:core + check:browser | `hooks/pre-push` |
+| `npm run check` | check:core + check:lint + check:browser | `hooks/pre-push` |
 
 The browser test builds the fixtures into a temp dir and serves them at
 `/codebase-trends/`, so a root-absolute URL fails it.

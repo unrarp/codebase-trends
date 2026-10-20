@@ -1,8 +1,13 @@
 import { textHash } from '../hash.js';
 
+const TAG = /^\[([^\]]+)\]\s*/;
+
 /** Strips leading `[Tag]` groups from text, pushing each as a lowercase tag; returns the rest. */
 export function stripTags(text, tags) {
-  for (let m; (m = text.match(/^\[([^\]]+)\]\s*/)); text = text.slice(m[0].length)) tags.push(m[1].toLowerCase());
+  for (let m = text.match(TAG); m; m = text.match(TAG)) {
+    tags.push(m[1].toLowerCase());
+    text = text.slice(m[0].length);
+  }
   return text;
 }
 

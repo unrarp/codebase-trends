@@ -14,7 +14,10 @@ test('drops created/modified, keeps version → ts', () => {
 
 test('fetchNpmTimes requests the registry URL for the package', async () => {
   let url;
-  const t = await fetchNpmTimes('@anthropic-ai/claude-code', async (u) => ((url = u), packument));
+  const t = await fetchNpmTimes('@anthropic-ai/claude-code', async (u) => {
+    url = u;
+    return packument;
+  });
   assert.equal(url, 'https://registry.npmjs.org/@anthropic-ai/claude-code');
   assert.ok(t['2.1.299']);
 });

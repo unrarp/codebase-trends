@@ -50,7 +50,7 @@ async function collectChangelog(project, { dir, seedDir, net }) {
     if (e.code !== 'ENOENT') throw e;
   }
   const npm = await fetchNpmTimes(project.sources.npm, net.fetchJson);
-  writeFileSync(join(dir, 'dates.json'), JSON.stringify({ ...seed, ...npm }, null, 2) + '\n');
+  writeFileSync(join(dir, 'dates.json'), `${JSON.stringify({ ...seed, ...npm }, null, 2)}\n`);
 }
 
 /** Commits basis: appends first-parent commits since `sources.git.since` not already in events.jsonl. */

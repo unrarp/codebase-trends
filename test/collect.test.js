@@ -62,7 +62,7 @@ test('a new version at the top is appended, existing ones are not', async () => 
 test('commits basis: collect appends parsed commits', async () => {
   const dataRoot = tmp('ct-');
   const bun = { id: 'bun', basis: 'commits', sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } } };
-  const net = { gitLog: async (git, from, use) => use({ log: () => fx('git-log-bun.txt'), numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])) }) };
+  const net = { gitLog: async (_git, _from, use) => use({ log: () => fx('git-log-bun.txt'), numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])) }) };
   await collect([bun], { dataRoot, net });
   const events = lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).map((l) => JSON.parse(l));
   assert.equal(events.length, 6);
