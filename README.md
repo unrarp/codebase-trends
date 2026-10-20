@@ -101,6 +101,7 @@ Either way a successful run pings healthchecks.io.
 npm install
 npx playwright install chromium   # once, for the browser test
 git config core.hooksPath hooks   # runs `npm run check` before every push
+git config blame.ignoreRevsFile .git-blame-ignore-revs   # blame skips the Biome reformat
 ```
 
 Zero runtime dependencies, plain ESM, Node ≥ 22; Playwright and Biome are the

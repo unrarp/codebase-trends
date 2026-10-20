@@ -1,0 +1,3 @@
+# Layout-only commits, skipped by git blame (GitHub reads this file; locally see README "Developing").
+# style: format the codebase with Biome and gate it in check:lint
+dfa70428ad8041505f1f7e2339dbcbaa18936712
