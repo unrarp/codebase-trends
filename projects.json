@@ -18,5 +18,14 @@
     "bots": [],
     "links": { "commit": "https://github.com/openai/codex/commit/{sha}" },
     "annotations": ["openai"]
+  },
+  {
+    "id": "bun",
+    "name": "Bun",
+    "basis": "commits",
+    "sources": { "git": { "repo": "https://github.com/oven-sh/bun", "branch": "main", "since": "2025-01-01" } },
+    "bots": ["robobun", "jarred-sumner-bot", "Claude Bot"],
+    "links": { "commit": "https://github.com/oven-sh/bun/commit/{sha}" },
+    "annotations": ["anthropic"]
   }
 ]

@@ -22,5 +22,17 @@
       "commit": "https://github.com/openai/codex/commit/{sha}"
     },
     "source": "https://github.com/openai/codex"
+  },
+  {
+    "id": "bun",
+    "name": "Bun",
+    "basis": "commits",
+    "annotations": [
+      "anthropic"
+    ],
+    "links": {
+      "commit": "https://github.com/oven-sh/bun/commit/{sha}"
+    },
+    "source": "https://github.com/oven-sh/bun"
   }
 ]
