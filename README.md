@@ -105,17 +105,18 @@ git config core.hooksPath hooks   # runs `npm run check` before every push
 git config blame.ignoreRevsFile .git-blame-ignore-revs   # blame skips the Biome reformat
 ```
 
-Zero runtime dependencies. The Node side is TypeScript that Node ≥ 22.18 runs
-directly by stripping the types, so there is no build step and only erasable
-syntax is allowed (`tsconfig.json`'s `erasableSyntaxOnly`). Playwright, Biome,
-TypeScript and `@types/node` are the only devDependencies.
+Zero runtime dependencies. Everything is TypeScript, and only erasable syntax
+is allowed (`erasableSyntaxOnly`): Node ≥ 22.18 runs the Node side directly by
+stripping the types, and `build.ts` strips the site's the same way. Playwright,
+Biome, TypeScript, `@types/node` and `chart.js` (types only) are the only
+devDependencies.
 
 | script | runs | where |
 |---|---|---|
 | `npm test` | `node --test 'test/**/*.test.ts'` | everywhere |
-| `npm run check:syntax` | imports every module under `src/` and `scripts/` (`node --check` passes any `.ts` file unchecked), then `node --check src/site/app.js` | everywhere |
+| `npm run check:syntax` | imports every module under `src/` and `scripts/` (`node --check` passes any `.ts` file unchecked); the build itself rejects a site module that does not parse | everywhere |
 | `npm run check:data` | `node src/validate.ts` over `docs/` | everywhere |
-| `npm run check:types` | `tsc`: strict type check, emits nothing (`tsconfig.json`) | local only |
+| `npm run check:types` | `tsc` for the Node side (`tsconfig.json`) and the site (`src/site/tsconfig.json`): strict, emits nothing | local only |
 | `npm run check:lint` | `biome check`: recommended lint rules, formatting, import order (`biome.json`); `npx biome check --write` fixes | local only |
 | `npm run check:browser` | Playwright smoke test at 1280×800 and 375×812 | local only |
 | `npm run check:core` | test + check:syntax + check:data | routine, before every commit |
@@ -123,8 +124,9 @@ TypeScript and `@types/node` are the only devDependencies.
 
 **VS Code:** `.vscode/` makes Biome the formatter on save and adds debug
 configs: *Dev server*, *Current file*, *Current test file* (Node, pinned to
-22.22.0 through nvm) and *Site in Chromium*. Breakpoints in `.ts` files bind
-to their own lines, since stripping the types leaves every line in place.
+22.22.0 through nvm) and *Site in Chromium* (against `npm run dev`). Breakpoints
+in Node-side `.ts` files bind to their own lines, since stripping the types
+leaves every line in place; the site's bind through its source maps.
 
 The browser test builds the fixtures into a temp dir and serves them at
 `/codebase-trends/`, so a root-absolute URL fails it.
@@ -132,15 +134,19 @@ The browser test builds the fixtures into a temp dir and serves them at
 **Dev server:** `npm run dev` builds `data/` into a temp dir and serves it at
 <http://localhost:8090/codebase-trends/> (`PORT` overrides), restarting and
 rebuilding whenever `src/`, `scripts/`, `data/` or the config changes; it
-writes nothing in the repo. Set breakpoints in `app.js` in the browser's
-DevTools. To step through `build.ts`, start the *Dev server* debug config, or
-run `node --inspect-brk scripts/dev.ts` and attach from `chrome://inspect`.
+writes nothing in the repo. Set breakpoints in the site's `.ts` modules from
+VS Code (*Site in Chromium*) or the browser's DevTools. To step through
+`build.ts`, start the *Dev server* debug config, or run
+`node --inspect-brk scripts/dev.ts` and attach from `chrome://inspect`.
 
-The site is hand-written browser JS (`src/site/app.js`, `app.css`) plus
-Chart.js 4.5.1 (MIT), vendored unmodified at `docs/vendor/chart.umd.js`.
-`build.ts` copies the site files into `docs/` and stamps each asset URL with
-its content hash, so a changed script loads with the page instead of after the
-Pages and browser caches expire.
+The site is hand-written TypeScript modules (`src/site/*.ts`, entry `app.ts`)
+and `app.css`, plus Chart.js 4.5.1 (MIT), vendored unmodified at
+`docs/vendor/chart.umd.js`. `build.ts` strips each module's types into
+`docs/app/<name>.js` beside a source map, and copies `app.css`. Asset URLs
+carry their content hash, so a changed script loads with the page instead of
+after the Pages and browser caches expire: stylesheet and Chart.js URLs are
+stamped directly, and the page's import map points each module's `./x.ts`
+import at its stamped `.js`.
 
 **Local backfill:** `scripts/classify-local.sh <project>` collects, then labels
 pending events with local `claude -p` (`JOBS` parallel batches, default 4;

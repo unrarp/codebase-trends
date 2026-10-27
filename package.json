@@ -10,9 +10,9 @@
     "build": "node src/build.ts",
     "dev": "node --watch-path=src --watch-path=scripts --watch-path=data --watch-path=projects.json --watch-path=annotations.json scripts/dev.ts",
     "test": "node --test 'test/**/*.test.ts'",
-    "check:syntax": "node --input-type=module -e \"import { resolve } from 'node:path'; for (const f of process.argv.slice(1)) await import(resolve(f));\" $(find src scripts -name '*.ts' -not -path 'src/site/*') && node --check src/site/app.js",
+    "check:syntax": "node --input-type=module -e \"import { resolve } from 'node:path'; for (const f of process.argv.slice(1)) await import(resolve(f));\" $(find src scripts -name '*.ts' -not -path 'src/site/*')",
     "check:data": "node src/validate.ts",
-    "check:types": "tsc",
+    "check:types": "tsc && tsc -p src/site",
     "check:lint": "biome check",
     "check:browser": "npx playwright test test/browser.spec.ts",
     "check:core": "npm run test && npm run check:syntax && npm run check:data",
@@ -23,6 +23,7 @@
     "@biomejs/biome": "2.5.15",
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.20.5",
+    "chart.js": "4.5.1",
     "typescript": "7.0.2"
   }
 }

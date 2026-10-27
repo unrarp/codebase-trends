@@ -1,4 +1,4 @@
-/* Every colour is a light-dark(light, dark) pair, picked by color-scheme: the OS's unless the theme button forces one. app.js reads the ones
+/* Every colour is a light-dark(light, dark) pair, picked by color-scheme: the OS's unless the theme button forces one. app.ts reads the ones
    the chart paints through css(), so the canvas follows too; the bucket colours in GROUPS pass on both surfaces. */
 :root {
   color-scheme: light dark;

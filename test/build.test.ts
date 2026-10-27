@@ -194,11 +194,28 @@ test('asset URLs carry a content hash, so a changed script or stylesheet is refe
       .update(readFileSync(join(out, f)))
       .digest('hex')
       .slice(0, 8);
+  const importMap = (html: string): unknown =>
+    JSON.parse(/<script type="importmap">(.*?)<\/script>/.exec(html)?.[1] ?? 'null');
   const page = readFileSync(join(out, 'claude-code/index.html'), 'utf8');
   assert.match(page, new RegExp(`href="\\.\\./app\\.css\\?v=${hash('app.css')}"`));
-  assert.match(page, new RegExp(`src="\\.\\./app\\.js\\?v=${hash('app.js')}"`));
   assert.match(page, new RegExp(`src="\\.\\./vendor/chart\\.umd\\.js\\?v=${hash('vendor/chart.umd.js')}"`));
+  // every module under src/site, not only the entry, since modules import each other through the map
+  const modules = readdirSync(fileURLToPath(new URL('../src/site/', import.meta.url)))
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+    .map((f) => f.slice(0, -'.ts'.length));
+  assert.ok(modules.includes('app') && modules.length > 1);
+  const imports = (rel: string) =>
+    Object.fromEntries(modules.map((m) => [`${rel}app/${m}.ts`, `${rel}app/${m}.js?v=${hash(`app/${m}.js`)}`]));
+  assert.deepEqual(importMap(page), { imports: imports('../') });
   const root = readFileSync(join(out, 'index.html'), 'utf8');
   assert.match(root, new RegExp(`href="\\./app\\.css\\?v=${hash('app.css')}"`));
-  assert.match(root, new RegExp(`src="\\./app\\.js\\?v=${hash('app.js')}"`));
+  assert.deepEqual(importMap(root), { imports: imports('./') });
+});
+
+test('each site module is built to browser JS with a source map that carries its TypeScript', () => {
+  const js = readFileSync(join(out, 'app/app.js'), 'utf8');
+  assert.ok(js.trimEnd().endsWith('//# sourceMappingURL=app.js.map'));
+  const map = JSON.parse(readFileSync(join(out, 'app/app.js.map'), 'utf8'));
+  assert.deepEqual(map.sources, ['app.ts']);
+  assert.equal(map.sourcesContent[0], readFileSync(new URL('../src/site/app.ts', import.meta.url), 'utf8'));
 });

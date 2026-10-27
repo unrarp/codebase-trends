@@ -3,10 +3,11 @@
 - **Every tracked file is public** — the repo is public and `docs/` is served at
   `unrarp.github.io/codebase-trends/`. No tokens, no `.env`, nothing private.
 - **Zero runtime dependencies, ESM TypeScript run directly by Node ≥ 22.18, `node --test`.**
-  Node only strips types: erasable syntax only (no `enum`, `namespace`, parameter
-  properties; `tsc` enforces it). Playwright, Biome, TypeScript and `@types/node`
-  are the only devDependencies. No bundler, Bun (cloud sessions cannot
-  `bun install`) or GitHub Actions.
+  Types are only stripped, by Node and by `build.ts` for the site: erasable syntax
+  only (no `enum`, `namespace`, parameter properties; `tsc` enforces it).
+  Playwright, Biome, TypeScript, `@types/node` and `chart.js` (types only) are the
+  only devDependencies. No bundler, Bun (cloud sessions cannot `bun install`) or
+  GitHub Actions.
 - **`data/` and `docs/` (except `docs/vendor/`) are machine-written** by
   `src/collect.ts`, `src/build.ts`, `scripts/classify-local.sh` and the routine.
   Never hand-edit them.

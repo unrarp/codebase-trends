@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES, COUNTED, classifyByRule } from './classify.ts';
@@ -66,6 +67,33 @@ const write = (path: string, text: string | Buffer): void => {
   writeFileSync(path, text);
 };
 const json = (path: string, v: unknown): void => write(path, `${JSON.stringify(v, null, 2)}\n`);
+const shortHash = (data: string | Buffer): string => createHash('sha256').update(data).digest('hex').slice(0, 8);
+
+const INLINE_MAP = '//# sourceMappingURL=data:application/json;base64,';
+
+/**
+ * Turns each src/site module into browser JS under out/app/ by erasing its types (Node's own stripper, so there is no
+ * compiler to install), beside a source map that carries the .ts, so DevTools and VS Code step through the source.
+ * out/app/ is rebuilt whole, so a renamed module leaves nothing behind. Returns the module names.
+ */
+function buildModules(out: string): string[] {
+  const dir = join(out, 'app');
+  rmSync(dir, { recursive: true, force: true });
+  const names = readdirSync(SITE)
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+    .map((f) => f.slice(0, -'.ts'.length));
+  for (const name of names) {
+    const ts = readFileSync(join(SITE, `${name}.ts`), 'utf8');
+    const [code = '', map = ''] = stripTypeScriptTypes(ts, {
+      mode: 'transform',
+      sourceMap: true,
+      sourceUrl: `${name}.ts`,
+    }).split(INLINE_MAP);
+    write(join(dir, `${name}.js`), `${code.trimEnd()}\n//# sourceMappingURL=${name}.js.map\n`);
+    json(join(dir, `${name}.js.map`), { ...JSON.parse(Buffer.from(map, 'base64').toString()), sourcesContent: [ts] });
+  }
+  return names;
+}
 const readJson = <T>(path: string, fallback: T): T =>
   existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) : fallback;
 
@@ -204,30 +232,32 @@ export function build({
     }),
   );
   write(join(out, 'data', 'annotations.json'), rows(readJson<Annotation[]>(join(root, 'annotations.json'), [])));
-  for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
+  copyFileSync(join(SITE, 'app.css'), join(out, 'app.css'));
+  const modules = buildModules(out);
   if (resolve(out) !== resolve(REPO, 'docs'))
     write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
   // Pages caches assets for ten minutes and browsers longer, while the HTML is fetched fresh: an asset URL that
   // carries its content hash makes a changed script or stylesheet load with the page instead of after the cache.
-  const hashes = new Map(
-    ['app.js', 'app.css', 'vendor/chart.umd.js']
-      .filter((f) => existsSync(join(out, f)))
-      .map((f) => [
-        f,
-        createHash('sha256')
-          .update(readFileSync(join(out, f)))
-          .digest('hex')
-          .slice(0, 8),
-      ]),
-  );
+  const hashOf = (f: string): string => shortHash(readFileSync(join(out, f)));
+  const hashes = new Map(['app.css', 'vendor/chart.umd.js'].map((f) => [f, hashOf(f)]));
   const assets = new RegExp(
     `(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`,
     'g',
   );
-  const stamp = (html: string): string =>
-    html.replace(assets, (_m, attr: string, rel: string, f: string) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
-  write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8')));
-  const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'));
+  // Modules import each other as `./x.ts`; the page's import map points each such URL at its stamped .js, so the
+  // sources need no rewriting. Map keys resolve against the page, hence `rel`.
+  const importMap = (rel: string): string =>
+    JSON.stringify({
+      imports: Object.fromEntries(
+        modules.map((m) => [`${rel}app/${m}.ts`, `${rel}app/${m}.js?v=${hashOf(`app/${m}.js`)}`]),
+      ),
+    });
+  const stamp = (html: string, rel: string): string =>
+    html
+      .replace(assets, (_m, attr: string, r: string, f: string) => `${attr}="${r}${f}?v=${hashes.get(f)}"`)
+      .replace('{"imports":{}}', importMap(rel));
+  write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8'), './'));
+  const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'), '../');
   for (const p of projects) {
     buildProject(p, root, out, generatedAt);
     write(

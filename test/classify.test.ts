@@ -123,10 +123,10 @@ test('commit rule categories stay inside CATEGORIES.commits', () => {
   }
 });
 
-test("COUNTED matches the site's GROUPS (src/site/app.js), which draws and counts the same buckets", () => {
-  const app = readFileSync(new URL('../src/site/app.js', import.meta.url), 'utf8');
+test("COUNTED matches the site's GROUPS (src/site/groups.ts), which draws and counts the same buckets", () => {
+  const app = readFileSync(new URL('../src/site/groups.ts', import.meta.url), 'utf8');
   const groups = [
-    ...(app.match(/const GROUPS = \[\n.*?\n\s*\];/s)?.[0] ?? '').matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g),
+    ...(app.match(/const GROUPS\b[^=]*= \[\n.*?\n\s*\];/s)?.[0] ?? '').matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g),
   ].map((m) => [m[1], [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1])]);
   assert.equal(groups.length, 4);
   assert.deepEqual(groups.flatMap(([, cats]) => cats).sort(), [...COUNTED].sort());

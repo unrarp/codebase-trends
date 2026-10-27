@@ -12,6 +12,7 @@ const TYPES: Record<string, string> = {
   '.js': 'text/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
+  '.map': 'application/json',
 };
 export const PREFIX = '/codebase-trends/';
 

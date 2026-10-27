@@ -610,7 +610,7 @@ test('the page and the chart follow the colour scheme, live, without a reload', 
   const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
   await open(page, 'claude-code/');
   expect(await colours(page)).toEqual(painted(LIGHT));
-  // The change event comes some frames later; a listener made after app.js's runs after it (creation order), so its
+  // The change event comes some frames later; a listener made after the site's runs after it (creation order), so its
   // firing means the chart has already repainted.
   const changed = page.evaluate(
     () => new Promise((r) => matchMedia('(prefers-color-scheme: dark)').addEventListener('change', r, { once: true })),
@@ -647,14 +647,14 @@ test('the theme button cycles auto, light, dark; a forced theme beats the OS and
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /theme/.test(k)))).toEqual([]);
 });
 
-test("a stored theme applies from the page's own head, before app.js: on the root and on a project page", async ({
+test("a stored theme applies from the page's own head, before app.ts: on the root and on a project page", async ({
   browser,
 }) => {
   for (const path of ['', 'claude-code/']) {
     const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
     await page.goto(`${base}claude-code/`);
     await page.evaluate(() => localStorage.setItem('codebase-trends:theme', 'dark'));
-    await page.route('**/app.js*', (r) => r.abort()); // hold the page: no redirect, only its own head runs
+    await page.route('**/app/app.js*', (r) => r.abort()); // hold the page: no redirect, only its own head runs
     await page.goto(base + path);
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), path || 'root').toBe(
       'rgb(13, 15, 18)',

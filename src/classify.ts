@@ -63,5 +63,5 @@ export function isCategory(basis: Basis, value: string): value is Category {
 }
 
 /** Product changes — the categories the site counts and draws; the rest (other, chore, test, docs, ci) is set aside.
- *  Must match GROUPS in src/site/app.js (test/classify.test.ts pins the two together). */
+ *  Must match GROUPS in src/site/groups.ts (test/classify.test.ts pins the two together). */
 export const COUNTED: Category[] = ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'];

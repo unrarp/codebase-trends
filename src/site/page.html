@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{name}} · codebase-trends</title>
-<!-- A theme picked with the button (app.js) applies before the first paint; without one, the OS decides. -->
+<!-- A theme picked with the button (app.ts) applies before the first paint; without one, the OS decides. -->
 <script>try { const t = localStorage.getItem('codebase-trends:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="stylesheet" href="../app.css">
 </head>
@@ -21,7 +21,7 @@
     <div id="kpis" class="kpis"></div>
   </section>
   <section class="panel">
-    <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
+    <!-- biome-ignore lint/a11y/useHeadingContent: app.ts fills the title -->
     <h2 id="title"></h2>
     <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
@@ -33,7 +33,7 @@
   </section>
   <section id="drill" class="panel" hidden>
     <div class="panel-head">
-      <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
+      <!-- biome-ignore lint/a11y/useHeadingContent: app.ts fills the title -->
       <h2 id="drill-title"></h2>
       <button id="drill-close" class="btn" type="button">Close</button>
     </div>
@@ -56,6 +56,8 @@
   </div>
 </dialog>
 <script src="../vendor/chart.umd.js"></script>
-<script src="../app.js" defer></script>
+<!-- build.ts fills the empty import map: each module's .ts import loads its built .js, stamped with its content hash. -->
+<script type="importmap">{"imports":{}}</script>
+<script type="module">import '../app/app.ts';</script>
 </body>
 </html>

@@ -9,7 +9,7 @@
       "userDataDir": "${env:HOME}/snap/chromium/common/vscode-debug-profile",
       "url": "http://localhost:8090/codebase-trends/",
       "webRoot": "${workspaceFolder}/src/site",
-      "pathMapping": { "/codebase-trends/": "${workspaceFolder}/src/site/" }
+      "pathMapping": { "/codebase-trends/app/": "${workspaceFolder}/src/site/" }
     },
     {
       "name": "Dev server",
