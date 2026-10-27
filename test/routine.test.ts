@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test } from 'node:test';
-import { build } from '../src/build.js';
+import { type TestContext, test } from 'node:test';
+import { build } from '../src/build.ts';
+import type { collect } from '../src/collect.ts';
 import {
   buildIfChanged,
   commitMessage,
@@ -11,19 +12,20 @@ import {
   main,
   prepareBatches,
   stageAndCount,
-} from '../src/routine.js';
-import { tmp } from './tmp.js';
+} from '../src/routine.ts';
+import type { ProjectConfig } from '../src/types.ts';
+import { tmp } from './tmp.ts';
 
-const projects = [
-  { id: 'p', basis: 'changelog' },
-  { id: 'q', basis: 'changelog' },
-  { id: 'r', basis: 'changelog' },
+const projects: ProjectConfig[] = [
+  { id: 'p', name: 'P', basis: 'changelog' },
+  { id: 'q', name: 'Q', basis: 'changelog' },
+  { id: 'r', name: 'R', basis: 'changelog' },
 ];
-const H = (n) => String(n).padStart(16, '0');
-const eventLines = (hs) =>
+const H = (n: number) => String(n).padStart(16, '0');
+const eventLines = (hs: number[]) =>
   hs.map((h) => `${JSON.stringify({ id: `v#${h}`, textHash: H(h), kind: 'changelog', text: `t${h}` })}\n`).join(''); // 't1' has no rule
 
-function dataTree(pendingByProject) {
+function dataTree(pendingByProject: Record<string, number[]>) {
   const root = tmp('routine-');
   const dataRoot = join(root, 'data');
   for (const [id, hs] of Object.entries(pendingByProject)) {
@@ -75,7 +77,7 @@ test('counts and message derive from numstat text', () => {
 
 test('change detection on a temp git repo', () => {
   const root = tmp('routine-git-');
-  const git = (...a) =>
+  const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
   mkdirSync(join(root, 'data', 'p'), { recursive: true });
   writeFileSync(join(root, 'data', 'p', 'events.jsonl'), '{"a":1}\n{"a":2}\n');
@@ -96,7 +98,7 @@ test('change detection on a temp git repo', () => {
 test('buildIfChanged: an unchanged build keeps the committed generatedAt and reports false; new data rebuilds stamped now', () => {
   const root = tmp('routine-build-');
   cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
-  const git = (...a) =>
+  const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: root, encoding: 'utf8' });
   const generatedAt = () =>
     JSON.parse(readFileSync(join(root, 'docs', 'data', 'claude-code', 'summary.json'), 'utf8')).generatedAt;
@@ -122,7 +124,7 @@ function routineRepo() {
   const root = tmp('routine-main-');
   cpSync(new URL('./fixtures/build/', import.meta.url), root, { recursive: true });
   build({ root, now: new Date('2026-10-14T12:00:00.000Z') });
-  const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
+  const git = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
   for (const [k, v] of [
     ['user.name', 't'],
@@ -135,9 +137,9 @@ function routineRepo() {
   const remote = tmp('routine-origin-');
   execFileSync('git', ['init', '-q', '--bare', remote]);
   git('remote', 'add', 'origin', remote);
-  const calls = [];
-  const collected = [];
-  const deps = {
+  const calls: string[] = [];
+  const collected: Parameters<typeof collect>[1][] = [];
+  const deps: Parameters<typeof main>[1] = {
     root,
     collect: async (_projects, opts) => {
       calls.push('collect');
@@ -150,16 +152,16 @@ function routineRepo() {
       calls.push('ping');
     },
   };
-  const origin = (...a) => execFileSync('git', ['--git-dir', remote, ...a], { encoding: 'utf8' }).trim();
+  const origin = (...a: string[]) => execFileSync('git', ['--git-dir', remote, ...a], { encoding: 'utf8' }).trim();
   return { root, git, origin, calls, collected, deps };
 }
 /** Silences console.log for the test; the returned function lists what was logged so far. */
-const logs = (t) => {
+const logs = (t: TestContext) => {
   const m = t.mock.method(console, 'log', () => {});
   return () => m.mock.calls.map((c) => c.arguments[0]);
 };
 /** Answers every batch line of the last classify hand-off: changelog items `added`, commits `fixed`. */
-function answerBatches(root) {
+function answerBatches(root: string) {
   const answers = join(root, '.routine', 'answers');
   mkdirSync(answers, { recursive: true });
   for (const f of readdirSync(join(root, '.routine', 'batches'))) {

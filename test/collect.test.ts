@@ -3,20 +3,27 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { collect } from '../src/collect.js';
-import { tmp } from './tmp.js';
+import type { fetchGitLog } from '../src/adapters/git-log.ts';
+import { collect, type Net } from '../src/collect.ts';
+import type { Event, ProjectConfig } from '../src/types.ts';
+import { tmp } from './tmp.ts';
 
-const fx = (n) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
+const fx = (n: string) => readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
 const SEED = fileURLToPath(new URL('../seed/', import.meta.url));
-const project = JSON.parse(fx('../../projects.json'))[0];
+const project: ProjectConfig = JSON.parse(fx('../../projects.json'))[0];
 const slice = fx('changelog-slice.md');
 const extra = fx('changelog-extra.md');
 const packument = JSON.parse(fx('npm-time.json'));
 
-const run = async (md, dataRoot, seedDir = SEED) => {
-  const net = { fetchText: async () => md, fetchJson: async () => packument };
+/** The collaborators a test does not exercise: any use fails it. */
+const unused = async (): Promise<never> => {
+  throw new Error('unexpected network call');
+};
+
+const run = async (md: string, dataRoot: string, seedDir = SEED) => {
+  const net: Net = { fetchText: async () => md, fetchJson: async () => packument, gitLog: unused };
   await collect([project], { dataRoot, seedDir, net });
-  const f = (n) => {
+  const f = (n: string) => {
     try {
       return readFileSync(join(dataRoot, 'claude-code', n), 'utf8');
     } catch {
@@ -25,7 +32,7 @@ const run = async (md, dataRoot, seedDir = SEED) => {
   };
   return { events: f('events.jsonl'), dates: JSON.parse(f('dates.json')) };
 };
-const lines = (s) => s.split('\n').filter(Boolean);
+const lines = (s: string) => s.split('\n').filter(Boolean);
 
 test('dates = npm ∪ seed, without created/modified', async () => {
   const { dates } = await run(slice + extra, tmp('ct-'));
@@ -65,7 +72,7 @@ test('a new version at the top is appended, existing ones are not', async () => 
   const b = await run(slice.replace('## 2.1.299', '## 2.1.300\n\n- Fixed a thing\n\n## 2.1.299'), root);
   const added = lines(b.events)
     .slice(lines(a.events).length)
-    .map((l) => JSON.parse(l));
+    .map((l) => JSON.parse(l) as Event);
   assert.deepEqual(
     added.map((e) => e.id),
     ['2.1.300#0'],
@@ -75,19 +82,23 @@ test('a new version at the top is appended, existing ones are not', async () => 
 
 test('commits basis: collect appends parsed commits', async () => {
   const dataRoot = tmp('ct-');
-  const bun = { id: 'bun', basis: 'commits', sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } } };
-  const net = {
-    gitLog: async (_git, _from, use) =>
-      use({
-        log: () => fx('git-log-bun.txt'),
-        numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])),
-      }),
+  const bun: ProjectConfig = {
+    id: 'bun',
+    name: 'Bun',
+    basis: 'commits',
+    sources: { git: { repo: 'r', branch: 'main', since: '2025-01-01' } },
   };
+  const gitLog: typeof fetchGitLog = async (_git, _from, use) =>
+    use({
+      log: () => fx('git-log-bun.txt'),
+      numstat: (shas) => new Map(shas.map((s) => [s, { add: 1, del: 0, files: 1 }])),
+    });
+  const net: Net = { fetchText: unused, fetchJson: unused, gitLog };
   await collect([bun], { dataRoot, net });
-  const events = lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).map((l) => JSON.parse(l));
+  const events = lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).map((l) => JSON.parse(l) as Event);
   assert.equal(events.length, 6);
   assert.ok(events.every((e) => e.kind === 'commit' && e.sha === e.id));
-  assert.ok(events.every((e) => e.stats.add === 1 && e.stats.files === 1)); // stats stored on the raw event
+  assert.ok(events.every((e) => e.stats?.add === 1 && e.stats.files === 1)); // stats stored on the raw event
   await collect([bun], { dataRoot, net });
   assert.equal(lines(readFileSync(join(dataRoot, 'bun', 'events.jsonl'), 'utf8')).length, 6); // known shas skipped
 });

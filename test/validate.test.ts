@@ -3,16 +3,17 @@ import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { build } from '../src/build.js';
-import { validate } from '../src/validate.js';
-import { tmp } from './tmp.js';
+import { build } from '../src/build.ts';
+import type { Annotation, CountRow, MonthEvent, ProjectEntry, Release, Summary } from '../src/types.ts';
+import { validate } from '../src/validate.ts';
+import { tmp } from './tmp.ts';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
 const good = tmp('ct-val-');
 build({ root: ROOT, out: good, now: new Date('2026-10-14T12:00:00Z') });
 
 /** Copies the good build, applies `change(dir)` to the copy, returns the violations. */
-function violationsIn(change) {
+function violationsIn(change: (dir: string) => void) {
   const out = tmp('ct-bad-');
   cpSync(good, out, { recursive: true });
   change(out);
@@ -20,19 +21,21 @@ function violationsIn(change) {
 }
 
 /** A change that applies `edit(json)` to one data file of the copy. */
-const json = (rel, edit) => (out) => {
-  const f = join(out, rel);
-  writeFileSync(f, JSON.stringify(edit(JSON.parse(readFileSync(f, 'utf8')))));
-};
+const json =
+  <T>(rel: string, edit: (data: T) => unknown) =>
+  (out: string) => {
+    const f = join(out, rel);
+    writeFileSync(f, JSON.stringify(edit(JSON.parse(readFileSync(f, 'utf8')))));
+  };
 
 /** Copies the good build, applies `edit(json)` to one data file, returns the violations. */
-const violationsAfter = (rel, edit) => violationsIn(json(rel, edit));
+const violationsAfter = <T>(rel: string, edit: (data: T) => unknown) => violationsIn(json(rel, edit));
 
 test('a good build passes', () => assert.deepEqual(validate(good), []));
 
 test('rejects an event without a ts', () => {
-  const errs = violationsAfter('data/claude-code/months/2026-08.json', (evs) => {
-    delete evs[0].ts;
+  const errs = violationsAfter('data/claude-code/months/2026-08.json', (evs: MonthEvent[]) => {
+    Reflect.deleteProperty(evs[0], 'ts');
     return evs;
   });
   assert.ok(
@@ -42,7 +45,7 @@ test('rejects an event without a ts', () => {
 });
 
 test('rejects Σ daily.total != summary.totals.events', () => {
-  const errs = violationsAfter('data/claude-code/summary.json', (s) => {
+  const errs = violationsAfter('data/claude-code/summary.json', (s: Summary) => {
     s.totals.events += 1;
     return s;
   });
@@ -53,12 +56,16 @@ test('rejects Σ daily.total != summary.totals.events', () => {
 });
 
 test('rejects a missing calendar day and a missing ISO week', () => {
-  const day = violationsAfter('data/claude-code/daily.json', (rows) => rows.filter((r) => r.d !== '2026-07-10'));
+  const day = violationsAfter('data/claude-code/daily.json', (rows: CountRow[]) =>
+    rows.filter((r) => r.d !== '2026-07-10'),
+  );
   assert.ok(
     day.some((e) => /every calendar day/.test(e)),
     day.join('\n'),
   );
-  const week = violationsAfter('data/sparse/weekly.json', (rows) => rows.filter((r) => r.d !== '2026-08-10'));
+  const week = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) =>
+    rows.filter((r) => r.d !== '2026-08-10'),
+  );
   assert.ok(
     week.some((e) => /every ISO week/.test(e)),
     week.join('\n'),
@@ -66,8 +73,8 @@ test('rejects a missing calendar day and a missing ISO week', () => {
 });
 
 test('rejects an annotation whose major flag is not a boolean', () => {
-  const errs = violationsAfter('data/annotations.json', (ann) => {
-    ann[0].major = 'yes';
+  const errs = violationsAfter('data/annotations.json', (ann: Annotation[]) => {
+    Object.assign(ann[0], { major: 'yes' });
     return ann;
   });
   assert.ok(
@@ -77,7 +84,7 @@ test('rejects an annotation whose major flag is not a boolean', () => {
 });
 
 test('commits basis: weekly lines are ascending non-negative integers, no more than the row has counted commits', () => {
-  const unsorted = violationsAfter('data/sparse/weekly.json', (rows) => {
+  const unsorted = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) => {
     rows[0].lines = [15, 3];
     rows[0].counts.fixed = 2;
     return rows;
@@ -86,7 +93,7 @@ test('commits basis: weekly lines are ascending non-negative integers, no more t
     unsorted.some((e) => /lines/.test(e)),
     unsorted.join('\n'),
   );
-  const negative = violationsAfter('data/sparse/weekly.json', (rows) => {
+  const negative = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) => {
     rows[0].lines = [-1];
     return rows;
   });
@@ -94,7 +101,7 @@ test('commits basis: weekly lines are ascending non-negative integers, no more t
     negative.some((e) => /lines/.test(e)),
     negative.join('\n'),
   );
-  const tooMany = violationsAfter('data/sparse/weekly.json', (rows) => {
+  const tooMany = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) => {
     rows[0].lines = [15, 15, 15];
     return rows;
   }); // two counted commits in the row
@@ -102,23 +109,23 @@ test('commits basis: weekly lines are ascending non-negative integers, no more t
     tooMany.some((e) => /lines/.test(e)),
     tooMany.join('\n'),
   );
-  const notArray = violationsAfter('data/sparse/weekly.json', (rows) => {
-    rows[0].lines = { all: [15] };
+  const notArray = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) => {
+    Object.assign(rows[0], { lines: { all: [15] } });
     return rows;
   });
   assert.ok(
     notArray.some((e) => /lines/.test(e)),
     notArray.join('\n'),
   );
-  const missing = violationsAfter('data/sparse/weekly.json', (rows) => {
-    delete rows[0].lines;
+  const missing = violationsAfter('data/sparse/weekly.json', (rows: CountRow[]) => {
+    Reflect.deleteProperty(rows[0], 'lines');
     return rows;
   });
   assert.ok(
     missing.some((e) => /lines/.test(e)),
     missing.join('\n'),
   );
-  const onChangelog = violationsAfter('data/claude-code/weekly.json', (rows) => {
+  const onChangelog = violationsAfter('data/claude-code/weekly.json', (rows: CountRow[]) => {
     rows[0].lines = [];
     return rows;
   });
@@ -126,8 +133,8 @@ test('commits basis: weekly lines are ascending non-negative integers, no more t
     onChangelog.some((e) => /lines/.test(e)),
     onChangelog.join('\n'),
   );
-  const badStats = violationsAfter('data/sparse/months/2026-08.json', (evs) => {
-    evs[0].stats = { add: 1 };
+  const badStats = violationsAfter('data/sparse/months/2026-08.json', (evs: MonthEvent[]) => {
+    Object.assign(evs[0], { stats: { add: 1 } });
     return evs;
   });
   assert.ok(
@@ -137,18 +144,21 @@ test('commits basis: weekly lines are ascending non-negative integers, no more t
 });
 
 // One case per remaining check: each edit breaks exactly the invariant it names, and the check must say so.
-const set = (fn) => (x) => {
-  fn(x);
-  return x;
-};
+const set =
+  <T>(fn: (x: T) => void) =>
+  (x: T) => {
+    fn(x);
+    return x;
+  };
 const AUG = 'data/claude-code/months/2026-08.json';
-for (const [name, change, want] of [
+type Case = [name: string, change: (out: string) => void, want: RegExp];
+const cases: Case[] = [
   [
     'a project without a name',
     json(
       'data/projects.json',
-      set((ps) => {
-        delete ps[0].name;
+      set((ps: ProjectEntry[]) => {
+        Reflect.deleteProperty(ps[0], 'name');
       }),
     ),
     /^data\/projects\.json: claude-code: missing string name$/,
@@ -157,8 +167,8 @@ for (const [name, change, want] of [
     'a project with an unknown basis',
     json(
       'data/projects.json',
-      set((ps) => {
-        ps[1].basis = 'nope';
+      set((ps: ProjectEntry[]) => {
+        Object.assign(ps[1], { basis: 'nope' });
       }),
     ),
     /^data\/projects\.json: sparse: unknown basis nope$/,
@@ -167,8 +177,8 @@ for (const [name, change, want] of [
     'a project whose annotations are not a list',
     json(
       'data/projects.json',
-      set((ps) => {
-        ps[0].annotations = 'anthropic';
+      set((ps: ProjectEntry[]) => {
+        Object.assign(ps[0], { annotations: 'anthropic' });
       }),
     ),
     /^data\/projects\.json: claude-code: bad annotations\/links$/,
@@ -177,7 +187,7 @@ for (const [name, change, want] of [
     'a project whose source is not a URL',
     json(
       'data/projects.json',
-      set((ps) => {
+      set((ps: ProjectEntry[]) => {
         ps[0].source = 'CHANGELOG.md';
       }),
     ),
@@ -185,7 +195,7 @@ for (const [name, change, want] of [
   ],
   [
     'a project without its page',
-    (out) => rmSync(join(out, 'claude-code', 'index.html')),
+    (out: string) => rmSync(join(out, 'claude-code', 'index.html')),
     /^claude-code\/index\.html: missing page$/,
   ],
   [
@@ -193,22 +203,24 @@ for (const [name, change, want] of [
     json('data/annotations.json', () => ({})),
     /^data\/annotations\.json: not an array$/,
   ],
-  ...['date', 'label', 'vendor', 'kind', 'source'].map((k) => [
-    `an annotation without a ${k}`,
-    json(
-      'data/annotations.json',
-      set((a) => {
-        delete a[0][k];
-      }),
-    ),
-    /^data\/annotations\.json: bad entry /,
-  ]),
-  ['a site without its root page', (out) => rmSync(join(out, 'index.html')), /^index\.html: missing$/],
+  ...['date', 'label', 'vendor', 'kind', 'source'].map(
+    (k): Case => [
+      `an annotation without a ${k}`,
+      json(
+        'data/annotations.json',
+        set((a: Annotation[]) => {
+          Reflect.deleteProperty(a[0], k);
+        }),
+      ),
+      /^data\/annotations\.json: bad entry /,
+    ],
+  ),
+  ['a site without its root page', (out: string) => rmSync(join(out, 'index.html')), /^index\.html: missing$/],
   [
     'a summary for another project',
     json(
       'data/claude-code/summary.json',
-      set((s) => {
+      set((s: Summary) => {
         s.project = 'other';
       }),
     ),
@@ -218,8 +230,8 @@ for (const [name, change, want] of [
     'byCategory that does not sum to events',
     json(
       'data/claude-code/summary.json',
-      set((s) => {
-        s.totals.byCategory.fixed += 1;
+      set((s: Summary) => {
+        s.totals.byCategory.fixed = (s.totals.byCategory.fixed ?? 0) + 1;
       }),
     ),
     /^data\/claude-code\/summary\.json: byCategory does not sum to events$/,
@@ -228,7 +240,7 @@ for (const [name, change, want] of [
     'bySource that does not sum to events',
     json(
       'data/claude-code/summary.json',
-      set((s) => {
+      set((s: Summary) => {
         s.totals.bySource.rule += 1;
       }),
     ),
@@ -238,8 +250,8 @@ for (const [name, change, want] of [
     'a row whose total is not a number',
     json(
       'data/claude-code/daily.json',
-      set((rows) => {
-        rows[0].total = '1';
+      set((rows: CountRow[]) => {
+        Object.assign(rows[0], { total: '1' });
       }),
     ),
     /^data\/claude-code\/daily\.json 2026-07-03: bad row shape$/,
@@ -248,8 +260,8 @@ for (const [name, change, want] of [
     'a row whose counts do not sum to its total',
     json(
       'data/claude-code/daily.json',
-      set((rows) => {
-        rows[0].counts.fixed += 1;
+      set((rows: CountRow[]) => {
+        rows[0].counts.fixed = (rows[0].counts.fixed ?? 0) + 1;
       }),
     ),
     /^data\/claude-code\/daily\.json 2026-07-03: counts do not sum to total$/,
@@ -258,7 +270,7 @@ for (const [name, change, want] of [
     'a row category outside the basis set',
     json(
       'data/claude-code/weekly.json',
-      set((rows) => {
+      set((rows: CountRow[]) => {
         rows[0].counts.revert = 0;
       }),
     ),
@@ -268,7 +280,7 @@ for (const [name, change, want] of [
     'an event in the wrong month shard',
     json(
       AUG,
-      set((evs) => {
+      set((evs: MonthEvent[]) => {
         evs[0].ts = '2026-07-31T00:00:00.000Z';
       }),
     ),
@@ -278,7 +290,7 @@ for (const [name, change, want] of [
     'an event category outside the basis set',
     json(
       AUG,
-      set((evs) => {
+      set((evs: MonthEvent[]) => {
         evs[0].category = 'revert';
       }),
     ),
@@ -288,8 +300,8 @@ for (const [name, change, want] of [
     'an event with an unknown source',
     json(
       AUG,
-      set((evs) => {
-        evs[0].source = 'guess';
+      set((evs: MonthEvent[]) => {
+        Object.assign(evs[0], { source: 'guess' });
       }),
     ),
     /^data\/claude-code\/months\/2026-08\.json \S+: bad source guess$/,
@@ -298,28 +310,29 @@ for (const [name, change, want] of [
     'an event whose tags are not a list',
     json(
       AUG,
-      set((evs) => {
-        evs[0].tags = 'x';
+      set((evs: MonthEvent[]) => {
+        Object.assign(evs[0], { tags: 'x' });
       }),
     ),
     /^data\/claude-code\/months\/2026-08\.json \S+: bad shape$/,
   ],
   [
     'month shards that miss an event',
-    json(AUG, (evs) => evs.slice(1)),
+    json(AUG, (evs: MonthEvent[]) => evs.slice(1)),
     /^data\/claude-code\/months: 16 events != summary\.totals\.events 17$/,
   ],
   [
     'release counts that do not sum to events',
     json(
       'data/claude-code/releases.json',
-      set((rel) => {
+      set((rel: Release[]) => {
         rel[0].count += 1;
       }),
     ),
     /^data\/claude-code\/releases\.json: counts do not sum to events$/,
   ],
-]) {
+];
+for (const [name, change, want] of cases) {
   test(`rejects ${name}`, () => {
     const errs = violationsIn(change);
     assert.ok(

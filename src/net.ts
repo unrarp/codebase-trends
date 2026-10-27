@@ -1,8 +1,10 @@
+export type RetryPolicy = { attempts: number; delays: number[] };
+
 /** The one retry policy for network work: three tries, 2 s then 5 s apart. */
-export const RETRY = { attempts: 3, delays: [2000, 5000] };
+export const RETRY: RetryPolicy = { attempts: 3, delays: [2000, 5000] };
 
 /** Runs fn; on failure waits delays[i] ms and retries, up to `attempts` tries; the last error propagates. */
-export async function retry(fn, { attempts, delays }) {
+export async function retry<T>(fn: () => Promise<T>, { attempts, delays }: RetryPolicy): Promise<T> {
   for (let i = 1; ; i++) {
     try {
       return await fn();

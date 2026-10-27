@@ -1,9 +1,10 @@
-import { textHash } from '../hash.js';
+import { textHash } from '../hash.ts';
+import type { Event } from '../types.ts';
 
 const TAG = /^\[([^\]]+)\]\s*/;
 
 /** Strips leading `[Tag]` groups from text, pushing each as a lowercase tag; returns the rest. */
-export function stripTags(text, tags) {
+export function stripTags(text: string, tags: string[]): string {
   for (let m = text.match(TAG); m; m = text.match(TAG)) {
     tags.push(m[1].toLowerCase());
     text = text.slice(m[0].length);
@@ -12,8 +13,8 @@ export function stripTags(text, tags) {
 }
 
 /** `regression:<version>` and `pr:<n>` tags found in tag-stripped text, in that order. */
-export function textTags(text) {
-  const tags = [];
+export function textTags(text: string): string[] {
+  const tags: string[] = [];
   const reg = text.match(/regression (?:introduced )?(?:in|since) v?(\d+\.\d+\.\d+)/i);
   if (reg) tags.push(`regression:${reg[1]}`);
   const pr = text.match(/\(#(\d+)\)\s*$/);
@@ -22,9 +23,9 @@ export function textTags(text) {
 }
 
 /** Raw CHANGELOG.md text → Event[] (one per bullet, in file order). */
-export function parseChangelog(md, project) {
-  const events = [];
-  let version = null;
+export function parseChangelog(md: string, project: string): Event[] {
+  const events: Event[] = [];
+  let version: string | null = null;
   let index = 0;
   for (const line of md.split('\n')) {
     const h = line.match(/^## (\S+)/);
@@ -34,7 +35,7 @@ export function parseChangelog(md, project) {
       continue;
     }
     if (!version || !line.startsWith('- ')) continue;
-    const tags = [];
+    const tags: string[] = [];
     let text = stripTags(line.slice(2).trim(), tags);
     text = text.replace(/^\*\*[^*]+:\*\*\s*/, '');
     tags.push(...textTags(text));

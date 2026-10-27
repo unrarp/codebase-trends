@@ -2,11 +2,23 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES, COUNTED, classifyByRule } from './classify.js';
-import { readJsonl } from './store.js';
+import { CATEGORIES, COUNTED, classifyByRule } from './classify.ts';
+import { readJsonl } from './store.ts';
+import type {
+  Annotation,
+  Classification,
+  CountRow,
+  Dates,
+  Event,
+  MonthEvent,
+  ProjectConfig,
+  ProjectEntry,
+  Release,
+  Summary,
+} from './types.ts';
 
 /*
- * Output under docs/data/ (validate.js checks the invariants):
+ * Output under docs/data/ (validate.ts checks the invariants):
  *   projects.json            [{ id, name, basis, annotations: [vendor], links, source? }]   source: the one URL the page's
  *                            help dialog links (the changelog, or the git repo); the rest of the config's sources is not published
  *   annotations.json         copy of annotations.json
@@ -26,14 +38,14 @@ const SITE = join(REPO, 'src', 'site');
 const DAY = 86_400_000;
 
 /** Monday (YYYY-MM-DD) of the ISO week containing day d. */
-export function mondayOf(d) {
+export function mondayOf(d: string): string {
   const t = Date.parse(`${d}T00:00:00Z`);
   return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10);
 }
 
 /** Every YYYY-MM-DD from `from` to `to` inclusive, stepping `step` days. */
-export function eachDay(from, to, step = 1) {
-  const out = [];
+export function eachDay(from: string, to: string, step = 1): string[] {
+  const out: string[] = [];
   for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += step * DAY) {
     out.push(new Date(t).toISOString().slice(0, 10));
   }
@@ -41,50 +53,63 @@ export function eachDay(from, to, step = 1) {
 }
 
 /** Commits basis: author or any co-author is in project.bots or ends with "[bot]". */
-export function isBot(event, project) {
+export function isBot(event: Event, project: ProjectConfig): boolean {
   return [event.author, ...(event.coauthors ?? [])].some((n) => n && (project.bots?.includes(n) || /\[bot\]$/.test(n)));
 }
 
-const fill = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
-const rows = (arr) => (arr.length ? `[\n${arr.map((r) => JSON.stringify(r)).join(',\n')}\n]\n` : '[]\n');
-const write = (path, text) => {
+const fill = (tpl: string, vars: Record<string, string | undefined>): string =>
+  tpl.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+const rows = (arr: unknown[]): string =>
+  arr.length ? `[\n${arr.map((r) => JSON.stringify(r)).join(',\n')}\n]\n` : '[]\n';
+const write = (path: string, text: string | Buffer): void => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 };
-const json = (path, v) => write(path, `${JSON.stringify(v, null, 2)}\n`);
-const readJson = (path, fallback) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : fallback);
+const json = (path: string, v: unknown): void => write(path, `${JSON.stringify(v, null, 2)}\n`);
+const readJson = <T>(path: string, fallback: T): T =>
+  existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) : fallback;
 
 /** Raw events + config + labels → derived, ts-sorted events (events without a ts are skipped). */
-function deriveEvents(project, root) {
+function deriveEvents(project: ProjectConfig, root: string): MonthEvent[] {
   const dir = join(root, 'data', project.id);
-  const dates = readJson(join(dir, 'dates.json'), {});
-  const labels = new Map(readJsonl(join(dir, 'classifications.jsonl')).map((c) => [c.textHash, c]));
-  const out = [];
-  for (const e of readJsonl(join(dir, 'events.jsonl'))) {
-    const rawTs = e.ts ?? dates[e.version];
+  const dates = readJson<Dates>(join(dir, 'dates.json'), {});
+  const labels = new Map(readJsonl<Classification>(join(dir, 'classifications.jsonl')).map((c) => [c.textHash, c]));
+  const out: MonthEvent[] = [];
+  for (const e of readJsonl<Event>(join(dir, 'events.jsonl'))) {
+    const rawTs = e.ts ?? (e.version === undefined ? undefined : dates[e.version]);
     if (!rawTs) continue;
     const ruleCategory = classifyByRule(e, project);
     const label = labels.get(e.textHash);
-    const ev = { id: e.id, ts: new Date(rawTs).toISOString() };
-    if (e.version) ev.version = e.version;
-    if (e.sha) ev.sha = e.sha;
-    ev.category = ruleCategory ?? label?.category ?? 'other';
-    ev.source = ruleCategory ? 'rule' : label ? 'model' : 'pending';
-    ev.text = e.text;
-    ev.tags = e.tags;
-    if (e.author) ev.author = e.author;
-    if (project.basis === 'commits') ev.bot = isBot(e, project);
-    if (e.stats) ev.stats = e.stats;
     const tpl = project.basis === 'commits' ? project.links?.commit : project.links?.release;
-    if (tpl) ev.url = fill(tpl, { version: e.version, sha: e.sha });
+    // Key order is the order in the published JSON.
+    const ev: MonthEvent = {
+      id: e.id,
+      ts: new Date(rawTs).toISOString(),
+      ...(e.version ? { version: e.version } : {}),
+      ...(e.sha ? { sha: e.sha } : {}),
+      category: ruleCategory ?? label?.category ?? 'other',
+      source: ruleCategory ? 'rule' : label ? 'model' : 'pending',
+      text: e.text,
+      tags: e.tags,
+      ...(e.author ? { author: e.author } : {}),
+      ...(project.basis === 'commits' ? { bot: isBot(e, project) } : {}),
+      ...(e.stats ? { stats: e.stats } : {}),
+      ...(tpl ? { url: fill(tpl, { version: e.version, sha: e.sha }) } : {}),
+    };
     out.push(ev);
   }
   return out.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0)); // stable: ties keep file order
 }
 
-function aggregate(events, project, keyOf, keys, { lines = false } = {}) {
+function aggregate(
+  events: MonthEvent[],
+  project: ProjectConfig,
+  keyOf: (day: string) => string,
+  keys: string[],
+  { lines = false }: { lines?: boolean } = {},
+): CountRow[] {
   const cats = CATEGORIES[project.basis];
-  const by = new Map(
+  const by = new Map<string, CountRow>(
     keys.map((k) => [
       k,
       { d: k, counts: Object.fromEntries(cats.map((c) => [c, 0])), total: 0, ...(lines ? { lines: [] } : {}) },
@@ -92,42 +117,49 @@ function aggregate(events, project, keyOf, keys, { lines = false } = {}) {
   );
   for (const e of events) {
     const r = by.get(keyOf(e.ts.slice(0, 10)));
-    r.counts[e.category]++;
+    if (!r) throw new Error(`no row for ${e.ts}`);
+    r.counts[e.category] = (r.counts[e.category] ?? 0) + 1;
     r.total++;
-    if (lines && e.stats && COUNTED.includes(e.category)) r.lines.push(e.stats.add + e.stats.del);
+    if (lines && r.lines && e.stats && COUNTED.includes(e.category)) r.lines.push(e.stats.add + e.stats.del);
   }
-  if (lines) for (const r of by.values()) r.lines.sort((a, b) => a - b);
+  if (lines) for (const r of by.values()) r.lines?.sort((a, b) => a - b);
   return [...by.values()];
 }
 
-function buildProject(project, root, out, generatedAt) {
+function buildProject(project: ProjectConfig, root: string, out: string, generatedAt: string): void {
   const events = deriveEvents(project, root);
   const od = join(out, 'data', project.id);
   const today = generatedAt.slice(0, 10);
-  const firstDate = events.length ? events[0].ts.slice(0, 10) : null;
-  const lastDate = events.length && events.at(-1).ts.slice(0, 10) > today ? events.at(-1).ts.slice(0, 10) : today;
+  const firstDate = events[0]?.ts.slice(0, 10) ?? null;
+  const newest = events.at(-1)?.ts.slice(0, 10);
+  const lastDate = newest && newest > today ? newest : today;
   const days = firstDate ? eachDay(firstDate, lastDate) : [];
   const weeks = firstDate ? eachDay(mondayOf(firstDate), mondayOf(lastDate), 7) : [];
   const daily = aggregate(events, project, (d) => d, days);
   const weekly = aggregate(events, project, mondayOf, weeks, { lines: project.basis === 'commits' });
 
   const cats = CATEGORIES[project.basis];
-  const totals = {
+  const totals: Summary['totals'] = {
     events: events.length,
     byCategory: Object.fromEntries(cats.map((c) => [c, events.filter((e) => e.category === c).length])),
-    bySource: Object.fromEntries(
-      ['rule', 'model', 'pending'].map((s) => [s, events.filter((e) => e.source === s).length]),
-    ),
+    bySource: {
+      rule: events.filter((e) => e.source === 'rule').length,
+      model: events.filter((e) => e.source === 'model').length,
+      pending: events.filter((e) => e.source === 'pending').length,
+    },
   };
-  const releases = [];
+  const releases: Release[] = [];
   if (project.basis === 'changelog') {
-    const byVersion = new Map();
-    for (const e of events)
-      byVersion.set(e.version, { version: e.version, ts: e.ts, count: (byVersion.get(e.version)?.count ?? 0) + 1 });
+    const byVersion = new Map<string, Release>();
+    for (const e of events) {
+      if (e.version === undefined) continue;
+      const version = e.version;
+      byVersion.set(version, { version, ts: e.ts, count: (byVersion.get(version)?.count ?? 0) + 1 });
+    }
     releases.push(...byVersion.values());
     totals.versions = releases.length;
   }
-  json(join(od, 'summary.json'), {
+  const summary: Summary = {
     project: project.id,
     name: project.name,
     basis: project.basis,
@@ -135,7 +167,8 @@ function buildProject(project, root, out, generatedAt) {
     firstDate,
     lastDate,
     totals,
-  });
+  };
+  json(join(od, 'summary.json'), summary);
   write(join(od, 'daily.json'), rows(daily));
   write(join(od, 'weekly.json'), rows(weekly));
   if (project.basis === 'changelog') write(join(od, 'releases.json'), rows(releases));
@@ -145,12 +178,20 @@ function buildProject(project, root, out, generatedAt) {
 }
 
 /** Builds the whole site from `root` into `out`. */
-export function build({ root = REPO, out = join(root, 'docs'), now = new Date() } = {}) {
+export function build({
+  root = REPO,
+  out = join(root, 'docs'),
+  now = new Date(),
+}: {
+  root?: string;
+  out?: string;
+  now?: Date;
+} = {}): void {
   const generatedAt = new Date(now).toISOString();
-  const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
+  const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8')) as ProjectConfig[];
   json(
     join(out, 'data', 'projects.json'),
-    projects.map((p) => {
+    projects.map((p): ProjectEntry => {
       const source = p.sources?.changelog ?? p.sources?.git?.repo;
       return {
         id: p.id,
@@ -162,7 +203,7 @@ export function build({ root = REPO, out = join(root, 'docs'), now = new Date() 
       };
     }),
   );
-  write(join(out, 'data', 'annotations.json'), rows(readJson(join(root, 'annotations.json'), [])));
+  write(join(out, 'data', 'annotations.json'), rows(readJson<Annotation[]>(join(root, 'annotations.json'), [])));
   for (const f of ['app.js', 'app.css']) if (existsSync(join(SITE, f))) copyFileSync(join(SITE, f), join(out, f));
   if (resolve(out) !== resolve(REPO, 'docs'))
     write(join(out, 'vendor', 'chart.umd.js'), readFileSync(join(REPO, 'docs', 'vendor', 'chart.umd.js')));
@@ -183,21 +224,22 @@ export function build({ root = REPO, out = join(root, 'docs'), now = new Date() 
     `(href|src)="(\\.{1,2}/)(${[...hashes.keys()].map((f) => f.replace(/\./g, '\\.')).join('|')})"`,
     'g',
   );
-  const stamp = (html) => html.replace(assets, (_m, attr, rel, f) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
+  const stamp = (html: string): string =>
+    html.replace(assets, (_m, attr: string, rel: string, f: string) => `${attr}="${rel}${f}?v=${hashes.get(f)}"`);
   write(join(out, 'index.html'), stamp(readFileSync(join(SITE, 'index.html'), 'utf8')));
   const page = stamp(readFileSync(join(SITE, 'page.html'), 'utf8'));
   for (const p of projects) {
     buildProject(p, root, out, generatedAt);
     write(
       join(out, p.id, 'index.html'),
-      page.replace(/\{\{(\w+)\}\}/g, (m, k) => p[k] ?? m),
+      page.replace(/\{\{(\w+)\}\}/g, (m, k: string) => String((p as Record<string, unknown>)[k] ?? m)),
     );
   }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const arg = (k) => args[args.indexOf(k) + 1];
+  const arg = (k: string) => args[args.indexOf(k) + 1];
   const root = args.includes('--root') ? arg('--root') : REPO;
   build({ root, out: args.includes('--out') ? arg('--out') : join(root, 'docs') });
 }

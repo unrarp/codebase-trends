@@ -1,24 +1,23 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES, classifyByRule } from './classify.js';
-import { appendJsonl, readJsonl } from './store.js';
-
-/**
- * One line of data/<project>/classifications.jsonl: a model's label for every event sharing a textHash.
- * @typedef {{ textHash: string, category: string, model: string, ts: string }} Classification
- */
+import { CATEGORIES, classifyByRule, isCategory } from './classify.ts';
+import { appendJsonl, readJsonl } from './store.ts';
+import type { Category, Classification, Event, ProjectConfig } from './types.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MODEL = 'claude-sonnet-5-5';
 export const BATCH_SIZE = 50;
 
 /** Pending: one { textHash, text } per distinct textHash with no rule category and no classification; derived, never stored. */
-export function pendingOf(project, { dataRoot = join(ROOT, 'data') } = {}) {
+export function pendingOf(
+  project: ProjectConfig,
+  { dataRoot = join(ROOT, 'data') }: { dataRoot?: string } = {},
+): { textHash: string; text: string }[] {
   const dir = join(dataRoot, project.id);
-  const classified = new Set(readJsonl(join(dir, 'classifications.jsonl')).map((c) => c.textHash));
-  const pending = new Map();
-  for (const e of readJsonl(join(dir, 'events.jsonl'))) {
+  const classified = new Set(readJsonl<Classification>(join(dir, 'classifications.jsonl')).map((c) => c.textHash));
+  const pending = new Map<string, { textHash: string; text: string }>();
+  for (const e of readJsonl<Event>(join(dir, 'events.jsonl'))) {
     if (classifyByRule(e, project) === null && !classified.has(e.textHash) && !pending.has(e.textHash))
       pending.set(e.textHash, { textHash: e.textHash, text: e.text });
   }
@@ -26,11 +25,15 @@ export function pendingOf(project, { dataRoot = join(ROOT, 'data') } = {}) {
 }
 
 /** Writes `<project>-<n>.txt` batch files (≤ BATCH_SIZE pending entries each, n from 1) into dir; returns their paths. */
-export function writeBatches(project, dir, { dataRoot = join(ROOT, 'data') } = {}) {
+export function writeBatches(
+  project: ProjectConfig,
+  dir: string,
+  { dataRoot = join(ROOT, 'data') }: { dataRoot?: string } = {},
+): string[] {
   const pending = pendingOf(project, { dataRoot });
   const header = `# project: ${project.id} basis: ${project.basis} categories: ${CATEGORIES[project.basis].join(' ')}\n`;
   mkdirSync(dir, { recursive: true });
-  const paths = [];
+  const paths: string[] = [];
   for (let i = 0; i < pending.length; i += BATCH_SIZE) {
     const body = pending
       .slice(i, i + BATCH_SIZE)
@@ -48,43 +51,39 @@ export function writeBatches(project, dir, { dataRoot = join(ROOT, 'data') } = {
  * Returns { [project]: appendedCount }.
  */
 export function applyLabels(
-  files,
+  files: string[],
   {
     dataRoot = join(ROOT, 'data'),
-    projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8')),
+    projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8')) as ProjectConfig[],
     now = () => new Date().toISOString(),
-  } = {},
-) {
-  const byProject = new Map(); // id -> Map(textHash -> category)
-  const state = new Map();
+  }: { dataRoot?: string; projects?: ProjectConfig[]; now?: () => string } = {},
+): Record<string, number> {
+  const byProject = new Map<string, Map<string, Category>>(); // id -> Map(textHash -> category)
+  const state = new Map<string, Set<string>>();
   for (const file of files) {
     const name = basename(file);
     const m = /^(.+)-\d+\.txt$/.exec(name);
     const project = m && projects.find((p) => p.id === m[1]);
     if (!project) throw new Error(`${file}: not named <project>-<n>.txt for a known project`);
-    if (!state.has(project.id)) {
-      state.set(project.id, new Set(pendingOf(project, { dataRoot }).map((p) => p.textHash)));
-      byProject.set(project.id, new Map());
-    }
-    const pending = state.get(project.id);
-    const found = byProject.get(project.id);
+    const pending = state.get(project.id) ?? new Set(pendingOf(project, { dataRoot }).map((p) => p.textHash));
+    const found = byProject.get(project.id) ?? new Map<string, Category>();
+    state.set(project.id, pending);
+    byProject.set(project.id, found);
     readFileSync(file, 'utf8')
       .split('\n')
       .forEach((line, i) => {
         if (!line.trim()) return;
-        const fail = (why) => {
-          throw new Error(`${file}:${i + 1}: ${why}: ${line}`);
-        };
+        const fail = (why: string) => new Error(`${file}:${i + 1}: ${why}: ${line}`);
         const lm = /^([0-9a-f]{16}): (\S+)$/.exec(line.trim());
-        if (!lm) fail('malformed line');
-        const [, hash, category] = lm;
-        if (!pending.has(hash)) fail('hash not pending');
-        if (!CATEGORIES[project.basis].includes(category)) fail(`category not in ${project.basis} set`);
+        if (!lm) throw fail('malformed line');
+        const [, hash = '', category = ''] = lm;
+        if (!pending.has(hash)) throw fail('hash not pending');
+        if (!isCategory(project.basis, category)) throw fail(`category not in ${project.basis} set`);
         if (!found.has(hash)) found.set(hash, category);
       });
   }
   const ts = now();
-  const counts = {};
+  const counts: Record<string, number> = {};
   for (const [id, found] of byProject) {
     const rows = [...found].map(([textHash, category]) => ({ textHash, category, model: MODEL, ts }));
     appendJsonl(join(dataRoot, id, 'classifications.jsonl'), rows);
@@ -98,7 +97,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     if (first === '--write-batches') {
       // --write-batches <project> <dir>
-      const projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8'));
+      const projects = JSON.parse(readFileSync(join(ROOT, 'projects.json'), 'utf8')) as ProjectConfig[];
       const project = projects.find((p) => p.id === rest[0]);
       if (!project) throw new Error(`unknown project ${rest[0]}`);
       for (const p of writeBatches(project, rest[1])) console.log(p);
@@ -107,7 +106,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         console.log(`${id}: appended ${n} labels`);
     }
   } catch (e) {
-    console.error(e.message);
+    console.error((e as Error).message);
     process.exit(1);
   }
 }

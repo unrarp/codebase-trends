@@ -1,19 +1,24 @@
 // Local dev server: builds data/ into a scratch dir and serves it at /codebase-trends/, as Pages does.
 // `npm run dev` restarts it, and so rebuilds, whenever src/, scripts/, data/ or the config changes.
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from '../src/build.js';
+import { build } from '../src/build.ts';
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+const TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+};
 export const PREFIX = '/codebase-trends/';
 
 /** An HTTP server for the site built into dir, under PREFIX; not yet listening. */
-export function siteServer(dir) {
+export function siteServer(dir: string): Server {
   return createServer((req, res) => {
-    const url = new URL(req.url, 'http://x').pathname;
+    const url = new URL(req.url ?? '/', 'http://x').pathname;
     let file = url.startsWith(PREFIX) ? join(dir, normalize(url.slice(PREFIX.length))) : null;
     if (file && existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
     if (!file || !existsSync(file)) {

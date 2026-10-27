@@ -2,22 +2,30 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyLabels, writeBatches } from './apply-labels.js';
-import { build } from './build.js';
-import { collect } from './collect.js';
-import { RETRY, retry } from './net.js';
+import { applyLabels, writeBatches } from './apply-labels.ts';
+import { build } from './build.ts';
+import { collect } from './collect.ts';
+import { RETRY, retry } from './net.ts';
+import type { ProjectConfig, Summary } from './types.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** Empties batchesDir, then writes batch files for every project's pending (none for a project with none); returns the paths. */
-export function prepareBatches(projects, batchesDir, { dataRoot = join(ROOT, 'data') } = {}) {
+export function prepareBatches(
+  projects: ProjectConfig[],
+  batchesDir: string,
+  { dataRoot = join(ROOT, 'data') }: { dataRoot?: string } = {},
+): string[] {
   rmSync(batchesDir, { recursive: true, force: true });
   return projects.flatMap((p) => writeBatches(p, batchesDir, { dataRoot }));
 }
 
-/** Added-line counts per project from `git diff --numstat` text: { events, labels, projects }. */
-export function countsFromNumstat(text) {
-  const byProject = {};
+/** What a data commit adds: event and label lines, and the projects touched. */
+export type DataCounts = { events: number; labels: number; projects: string[] };
+
+/** Added-line counts per project from `git diff --numstat` text. */
+export function countsFromNumstat(text: string): DataCounts {
+  const byProject: Record<string, true> = {};
   let events = 0;
   let labels = 0;
   for (const line of text.split('\n')) {
@@ -30,11 +38,11 @@ export function countsFromNumstat(text) {
   return { events, labels, projects: Object.keys(byProject) };
 }
 
-export function commitMessage({ events, labels, projects }) {
+export function commitMessage({ events, labels, projects }: DataCounts): string {
   return `data: ${projects.join(', ') || 'no changes'} +${events} events, +${labels} labels`;
 }
 
-const run = (cmd, args, cwd = ROOT) =>
+const run = (cmd: string, args: string[], cwd = ROOT): string =>
   execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 /**
@@ -42,10 +50,11 @@ const run = (cmd, args, cwd = ROOT) =>
  * committed tree there is nothing to publish and the result is false. Otherwise rebuilds stamped `now` and returns true,
  * so generatedAt is the last time the published data changed (the site's hatch starts there).
  */
-export function buildIfChanged({ root = ROOT, now = new Date() } = {}) {
-  const [first] = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
+export function buildIfChanged({ root = ROOT, now = new Date() }: { root?: string; now?: Date } = {}): boolean {
+  const [first] = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8')) as ProjectConfig[];
   const summary = first && join(root, 'docs', 'data', first.id, 'summary.json');
-  const prev = summary && existsSync(summary) ? JSON.parse(readFileSync(summary, 'utf8')).generatedAt : null;
+  const prev =
+    summary && existsSync(summary) ? (JSON.parse(readFileSync(summary, 'utf8')) as Summary).generatedAt : null;
   build({ root, now: prev ? new Date(prev) : now });
   if (!run('git', ['status', '--porcelain', '--', 'data', 'docs'], root).trim()) return false;
   build({ root, now });
@@ -53,12 +62,12 @@ export function buildIfChanged({ root = ROOT, now = new Date() } = {}) {
 }
 
 /** Stages data/ and docs/ (whichever exist) in the repo at cwd; returns the counts of what is staged. */
-export function stageAndCount(cwd = ROOT) {
+export function stageAndCount(cwd = ROOT): DataCounts {
   run('git', ['add', ...['data', 'docs'].filter((d) => existsSync(join(cwd, d)))], cwd);
   return countsFromNumstat(run('git', ['diff', '--cached', '--numstat'], cwd));
 }
 
-async function ping(suffix = '') {
+async function ping(suffix = ''): Promise<void> {
   const url = process.env.HEALTHCHECK_URL;
   if (!url) return console.log('HEALTHCHECK_URL not set; skipping ping');
   await retry(async () => {
@@ -69,15 +78,20 @@ async function ping(suffix = '') {
 
 /** One routine run in the repo at `root`; returns the exit code. Collection, the check and the ping are injectable for tests. */
 export async function main(
-  argv,
+  argv: string[],
   {
     root = ROOT,
     collect: collectAll = collect,
     check = () => run('npm', ['run', 'check:core'], root),
     ping: notify = ping,
+  }: {
+    root?: string;
+    collect?: typeof collect;
+    check?: () => unknown;
+    ping?: () => Promise<void>;
   } = {},
-) {
-  const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8'));
+): Promise<number> {
+  const projects = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8')) as ProjectConfig[];
   const dataRoot = join(root, 'data');
   const labelsAt = argv.indexOf('--labels');
   if (labelsAt >= 0) {
@@ -105,7 +119,8 @@ export async function main(
   try {
     check();
   } catch (e) {
-    throw new Error(`check:core failed\n${e.stdout ?? ''}${e.stderr ?? ''}`);
+    const { stdout = '', stderr = '' } = e as { stdout?: string; stderr?: string };
+    throw new Error(`check:core failed\n${stdout}${stderr}`);
   }
 
   const counts = stageAndCount(root);
@@ -123,11 +138,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     process.exitCode = await main(process.argv.slice(2));
   } catch (e) {
-    console.error(e.message);
+    console.error((e as Error).message);
     try {
       await ping('/fail');
     } catch (pe) {
-      console.error(`fail ping: ${pe.message}`);
+      console.error(`fail ping: ${(pe as Error).message}`);
     }
     process.exitCode = 1;
   }

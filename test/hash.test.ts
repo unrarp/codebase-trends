@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { textHash } from '../src/hash.js';
+import { textHash } from '../src/hash.ts';
 
 test('textHash is the key of every stored label: a known event keeps its hash', () => {
   // A model-labelled codex event in data/: any change to the hash orphans every classification.

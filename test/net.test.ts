@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RETRY, retry } from '../src/net.js';
+import { RETRY, retry } from '../src/net.ts';
 
 const opts = { attempts: 3, delays: [1, 1] };
 
@@ -31,9 +31,9 @@ test('the retry policy waits 2 s, then 5 s, before giving up after three tries',
   const done = retry(async () => {
     calls++;
     throw new Error('down');
-  }, RETRY).catch((e) => e);
+  }, RETRY).catch((e: Error) => e);
   const settle = () => new Promise((r) => setImmediate(r)); // let the rejected try schedule its wait
-  const after = async (ms) => {
+  const after = async (ms: number) => {
     t.mock.timers.tick(ms);
     await settle();
     return calls;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { fetchNpmTimes, parseNpmTimes } from '../src/adapters/npm-times.js';
+import { fetchNpmTimes, parseNpmTimes } from '../src/adapters/npm-times.ts';
 
 const packument = JSON.parse(readFileSync(new URL('./fixtures/npm-time.json', import.meta.url), 'utf8'));
 
@@ -13,7 +13,7 @@ test('drops created/modified, keeps version → ts', () => {
 });
 
 test('fetchNpmTimes requests the registry URL for the package', async () => {
-  let url;
+  let url: string | undefined;
   const t = await fetchNpmTimes('@anthropic-ai/claude-code', async (u) => {
     url = u;
     return packument;

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { parseChangelog } from '../src/adapters/changelog-md.js';
-import { textHash } from '../src/hash.js';
+import { parseChangelog } from '../src/adapters/changelog-md.ts';
+import { textHash } from '../src/hash.ts';
 
 const md = readFileSync(new URL('./fixtures/changelog-slice.md', import.meta.url), 'utf8');
 const events = parseChangelog(md, 'claude-code');
-const byVersion = (v) => events.filter((e) => e.version === v);
+const byVersion = (v: string) => events.filter((e) => e.version === v);
 
 test('header date is stripped and ids are version#index', () => {
   const e = byVersion('2.1.0');
@@ -20,13 +20,13 @@ test('header date is stripped and ids are version#index', () => {
 
 test('[Tag] groups become lowercase tags and are stripped', () => {
   const e = events.find((x) => x.text.startsWith('Enabled session forking'));
-  assert.deepEqual(e.tags, ['vscode']);
-  assert.equal(e.id, '2.1.19#13');
+  assert.deepEqual(e?.tags, ['vscode']);
+  assert.equal(e?.id, '2.1.19#13');
 });
 
 test('**Bold:** lead-in is stripped', () => {
   const e = byVersion('2.1.126')[0];
-  assert.ok(e.text.startsWith('Fixed `allowManagedDomainsOnly`'));
+  assert.ok(e?.text.startsWith('Fixed `allowManagedDomainsOnly`'));
 });
 
 test('same text under two versions: two events, two ids, one textHash', () => {
@@ -40,7 +40,7 @@ test('same text under two versions: two events, two ids, one textHash', () => {
 
 test('regression: and pr: tags are extracted', () => {
   const reg = byVersion('2.1.299').find((e) => e.text.includes('(regression in 2.1.296)'));
-  assert.deepEqual(reg.tags, ['regression:2.1.296']);
+  assert.deepEqual(reg?.tags, ['regression:2.1.296']);
   const pr = byVersion('2.1.49')[0];
   assert.deepEqual(pr.tags, ['pr:26637']);
 });

@@ -2,11 +2,13 @@
 
 - **Every tracked file is public** — the repo is public and `docs/` is served at
   `unrarp.github.io/codebase-trends/`. No tokens, no `.env`, nothing private.
-- **Zero runtime dependencies, plain ESM JavaScript, Node ≥ 22, `node --test`.**
-  Playwright and Biome are the only devDependencies. No TypeScript, bundler,
-  Bun (cloud sessions cannot `bun install`) or GitHub Actions.
+- **Zero runtime dependencies, ESM TypeScript run directly by Node ≥ 22.18, `node --test`.**
+  Node only strips types: erasable syntax only (no `enum`, `namespace`, parameter
+  properties; `tsc` enforces it). Playwright, Biome, TypeScript and `@types/node`
+  are the only devDependencies. No bundler, Bun (cloud sessions cannot
+  `bun install`) or GitHub Actions.
 - **`data/` and `docs/` (except `docs/vendor/`) are machine-written** by
-  `src/collect.js`, `src/build.js`, `scripts/classify-local.sh` and the routine.
+  `src/collect.ts`, `src/build.ts`, `scripts/classify-local.sh` and the routine.
   Never hand-edit them.
 - **`npm run check` must pass before every push from a dev machine**
   (`hooks/pre-push` enforces it). The routine has no browser, so it
@@ -16,9 +18,9 @@
   fix; other new tests are broken deliberately, watched failing, then restored.
 - **The routine commits to `master` every six hours whenever data changed** —
   `git pull --rebase` before you push. Change its behaviour through tracked
-  files (`ROUTINE.md`, `src/routine.js`), never the saved prompt on claude.ai.
+  files (`ROUTINE.md`, `src/routine.ts`), never the saved prompt on claude.ai.
 - **Categories are derived at build, never stored on events** — fix a
-  mislabel with a rule in `src/classify.js`; `events.jsonl` holds raw facts.
+  mislabel with a rule in `src/classify.ts`; `events.jsonl` holds raw facts.
 - **A new project lands with its backfill** — see README "Adding a project";
   pushing config alone makes the routine classify the whole history.
 - **No root-absolute URLs in `docs/`** — the site lives at `/codebase-trends/`.

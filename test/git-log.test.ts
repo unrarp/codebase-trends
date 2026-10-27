@@ -3,18 +3,27 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { collectGitLog, openRepo, parseGitLog, parseNumstat, shallowSince } from '../src/adapters/git-log.js';
-import { textHash } from '../src/hash.js';
-import { tmp } from './tmp.js';
+import {
+  collectGitLog,
+  type fetchGitLog,
+  openRepo,
+  parseGitLog,
+  parseNumstat,
+  shallowSince,
+} from '../src/adapters/git-log.ts';
+import { textHash } from '../src/hash.ts';
+import type { Event, GitSource, ProjectConfig } from '../src/types.ts';
+import { tmp } from './tmp.ts';
 
 // Real `git log --first-parent --format=GIT_LOG_FORMAT` output from oven-sh/bun (6 commits).
 const raw = readFileSync(new URL('./fixtures/git-log-bun.txt', import.meta.url), 'utf8');
 const events = parseGitLog(raw, 'bun');
-const bySubject = (s) => events.filter((e) => e.text === s);
+const bySubject = (s: string) => events.filter((e) => e.text === s);
 
 test('parses every record with sha id and UTC ts', () => {
   assert.equal(events.length, 6);
   const e = events.find((x) => x.sha.startsWith('d578f57'));
+  assert.ok(e);
   assert.equal(e.id, e.sha);
   assert.equal(e.kind, 'commit');
   assert.equal(e.project, 'bun');
@@ -26,7 +35,7 @@ test('parses every record with sha id and UTC ts', () => {
 test('Co-authored-by trailers become coauthor names', () => {
   const e = bySubject('esm bytecode (#26402)')[0];
   assert.deepEqual(e.coauthors, ['autofix-ci[bot]', 'Claude', 'Claude Bot', 'claude[bot]']);
-  assert.deepEqual(events.find((x) => x.sha.startsWith('d578f57')).coauthors, ['Jarred-Sumner']);
+  assert.deepEqual(events.find((x) => x.sha.startsWith('d578f57'))?.coauthors, ['Jarred-Sumner']);
   assert.deepEqual(bySubject('Update CLAUDE.md')[0].coauthors, []);
 });
 
@@ -55,25 +64,36 @@ test('shallowSince is one day before from', () => {
   assert.equal(shallowSince('2026-06-04T16:11:01.000Z'), '2026-06-03T16:11:01.000Z');
 });
 
-const project = { id: 'bun', sources: { git: { repo: 'r', branch: 'main', since: '2026-04-26' } } };
-const spy = () => {
-  const calls = [];
-  return {
-    calls,
-    fetchRaw: async (git, from, use) => {
-      calls.push({ git, from });
-      return use({ log: () => raw, numstat: () => new Map() });
-    },
-  };
+const project: ProjectConfig = {
+  id: 'bun',
+  name: 'Bun',
+  basis: 'commits',
+  sources: { git: { repo: 'r', branch: 'main', since: '2026-04-26' } },
 };
+const spy = () => {
+  const calls: { git: GitSource; from: string }[] = [];
+  const fetchRaw: typeof fetchGitLog = async (git, from, use) => {
+    calls.push({ git, from });
+    return use({ log: () => raw, numstat: () => new Map() });
+  };
+  return { calls, fetchRaw };
+};
+/** A stored event, reduced to the fields collectGitLog reads. */
+const stored = (sha: string, ts?: string): Event => ({
+  id: sha,
+  textHash: 'hash',
+  project: 'bun',
+  kind: 'commit',
+  text: '',
+  tags: [],
+  sha,
+  ts,
+});
 
 test('collect fetches from `since`, with or without stored events', async () => {
   // Resuming from the newest stored ts can cut off a first-parent commit whose committer date is older.
   const s = spy();
-  const existing = [
-    { sha: 'x', ts: '2026-05-01T00:00:00.000Z' },
-    { sha: 'y', ts: '2026-06-01T12:00:00.000Z' },
-  ];
+  const existing = [stored('x', '2026-05-01T00:00:00.000Z'), stored('y', '2026-06-01T12:00:00.000Z')];
   await collectGitLog(project, existing, s.fetchRaw);
   await collectGitLog(project, [], s.fetchRaw);
   assert.deepEqual(
@@ -96,6 +116,7 @@ test('commits with ts < since are dropped; the rest come back oldest first', asy
 test('leading [Tag] groups are stripped from the subject into lowercase tags', () => {
   const raw = readFileSync(new URL('./fixtures/git-log-codex.txt', import.meta.url), 'utf8');
   const [e] = parseGitLog(raw, 'codex');
+  assert.ok(e);
   assert.ok(e.text.startsWith('stop printing error message'), e.text);
   assert.equal(e.textHash, textHash('codex', e.text));
   assert.ok(e.tags.includes('codex'));
@@ -114,7 +135,7 @@ test('parseNumstat: add, del and file count per sha; a binary file counts as a f
 
 test('openRepo.numstat runs against a real repo, including a merge measured against its first parent', () => {
   const dir = tmp('ct-numstat-');
-  const git = (...args) =>
+  const git = (...args: string[]) =>
     execFileSync('git', ['-C', dir, ...args], {
       encoding: 'utf8',
       env: {
@@ -148,14 +169,19 @@ test('openRepo.numstat runs against a real repo, including a merge measured agai
 });
 
 test('collect asks the repo for the stats of new shas only and stores them on the events', async () => {
-  const asked = [];
+  const asked: string[] = [];
   const sizes = new Map([['d578f574e565ca740729abb6c7c1f6a3f02f11b1', { add: 1, del: 2, files: 3 }]]);
-  const fetchRaw = async (_git, _from, use) =>
+  const fetchRaw: typeof fetchGitLog = async (_git, _from, use) =>
     use({
       log: () => raw,
       numstat: (shas) => {
         asked.push(...shas);
-        return new Map(shas.filter((s) => sizes.has(s)).map((s) => [s, sizes.get(s)]));
+        return new Map(
+          shas.flatMap((s) => {
+            const size = sizes.get(s);
+            return size ? [[s, size] as const] : [];
+          }),
+        );
       },
     });
   const all = await collectGitLog(project, [], fetchRaw);
@@ -163,11 +189,11 @@ test('collect asks the repo for the stats of new shas only and stores them on th
   assert.deepEqual(asked.sort(), all.map((e) => e.sha).sort());
   const withStats = all.filter((e) => 'stats' in e);
   assert.equal(withStats.length, 1);
-  assert.deepEqual(withStats[0].stats, { add: 1, del: 2, files: 3 });
+  assert.deepEqual(withStats[0]?.stats, { add: 1, del: 2, files: 3 });
   asked.length = 0;
-  const out = await collectGitLog(project, [{ sha: all[0].sha }], fetchRaw);
+  const out = await collectGitLog(project, [stored(all[0]?.sha ?? '')], fetchRaw);
   assert.equal(asked.length, 2); // the known sha is not measured again
-  assert.ok(out.every((e) => e.sha !== all[0].sha));
+  assert.ok(out.every((e) => e.sha !== all[0]?.sha));
 });
 
 test('a commit at the shallow boundary gets no stats: with its parent cut off it would be sized against an empty tree', () => {
@@ -179,7 +205,8 @@ test('a commit at the shallow boundary gets no stats: with its parent cut off it
     GIT_COMMITTER_NAME: 'a',
     GIT_COMMITTER_EMAIL: 'a@b',
   };
-  const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env }).trim();
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env }).trim();
   git(src, 'init', '-q', '-b', 'main');
   writeFileSync(join(src, 'big.txt'), 'x\n'.repeat(500));
   git(src, 'add', 'big.txt');

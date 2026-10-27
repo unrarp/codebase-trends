@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { backfillStats } from '../scripts/backfill-stats.js';
-import { tmp } from './tmp.js';
+import { backfillStats } from '../scripts/backfill-stats.ts';
+import type { Repo } from '../src/adapters/git-log.ts';
+import { tmp } from './tmp.ts';
 
 test('backfill adds stats to commit events that lack them, keeps order, bytes and existing stats', () => {
   const path = join(tmp('ct-backfill-'), 'events.jsonl');
@@ -14,8 +15,9 @@ test('backfill adds stats to commit events that lack them, keeps order, bytes an
     '{"id":"v1#0","kind":"changelog","version":"1","text":"w"}',
   ].join('\n')}\n`;
   writeFileSync(path, before);
-  const asked = [];
-  const repo = {
+  const asked: string[] = [];
+  const repo: Repo = {
+    log: () => '',
     numstat: (shas) => {
       asked.push(...shas);
       return new Map([['a', { add: 1, del: 2, files: 1 }]]);

@@ -1,24 +1,56 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test } from '@playwright/test';
-import { PREFIX, siteServer } from '../scripts/dev.js';
-import { build } from '../src/build.js';
+import { expect, type Page, type Route, test } from '@playwright/test';
+import { PREFIX, siteServer } from '../scripts/dev.ts';
+import { build } from '../src/build.ts';
+import type { Annotation, CountRow, Counts, MonthEvent } from '../src/types.ts';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
 const NOW = Date.parse('2026-10-14T12:00:00.000Z'); // fixture generatedAt
 
+type Marker = { n: number; x: number; y: number | null };
+type Element2D = { x: number; options: { borderColor: string } };
+/** The slice of the Chart.js instance that the site exposes as `window.__chart` and these tests read. */
+type ChartHook = {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  width: number;
+  currentDevicePixelRatio: number;
+  chartArea: { left: number; right: number; bottom: number };
+  scales: {
+    x: { top: number; getPixelForValue(value: number): number; options: { grid: { tickLength: number } } };
+    y: { position: string };
+  };
+  data: { labels: string[]; datasets: { type?: string; label: string; yAxisID?: string; data: (number | null)[] }[] };
+  options: { plugins: { tooltip: { callbacks: { title(items: { dataIndex: number }[]): string } } } };
+  tooltip: { opacity: number; title: string[]; footer: string[] };
+  getDatasetMeta(index: number): { data: Element2D[]; dataset: { options: { borderColor: string } } };
+  getActiveElements(): unknown[];
+  $selected: { width: number } | null;
+  $hatch: { width: number };
+  $markers: Marker[];
+};
+declare global {
+  var __chart: ChartHook;
+}
+
 // Built in beforeAll, not at load: Playwright also loads this file in its main process, which runs no hooks.
-let out;
-let server;
-let base;
+let out = '';
+let server: Server | undefined;
+let base = '';
 test.beforeAll(async () => {
-  out = mkdtempSync(join(tmpdir(), 'ct-browser-'));
-  build({ root: ROOT, out, now: new Date(NOW) });
-  server = siteServer(out);
-  await new Promise((r) => server.listen(0, r));
-  base = `http://localhost:${server.address().port}${PREFIX}`;
+  const dir = mkdtempSync(join(tmpdir(), 'ct-browser-'));
+  out = dir;
+  build({ root: ROOT, out: dir, now: new Date(NOW) });
+  const s = siteServer(dir);
+  server = s;
+  await new Promise<void>((r) => s.listen(0, r));
+  const addr = s.address();
+  if (!addr || typeof addr === 'string') throw new Error('site server has no port');
+  base = `http://localhost:${addr.port}${PREFIX}`;
 });
 test.afterAll(() => {
   // also after a failed beforeAll, which may leave server unset
@@ -26,8 +58,8 @@ test.afterAll(() => {
   if (out) rmSync(out, { recursive: true, force: true });
 });
 
-async function open(page, path, at = NOW) {
-  const errors = [];
+async function open(page: Page, path: string, at = NOW) {
+  const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.clock.setFixedTime(at);
@@ -35,16 +67,17 @@ async function open(page, path, at = NOW) {
   if (path !== '') await page.waitForFunction(() => window.__chart);
   return errors;
 }
-const slot = (page) =>
+const slot = (page: Page) =>
   page.evaluate(() => {
     const s = __chart.scales.x;
     return s.getPixelForValue(1) - s.getPixelForValue(0);
   });
 // Chart.js handles canvas events once per animation frame, so two synthetic clicks in one frame collapse into the last.
-const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+const frame = (page: Page) =>
+  page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 // The fixture spans too few weeks to overflow 375px at 12px a week, so pad 40 empty weeks before it.
-const padWeeks = async (route) => {
+const padWeeks = async (route: Route) => {
   const res = await route.fetch();
   const w = await res.json();
   const pad = Array.from({ length: 40 }, (_, k) => ({
@@ -58,24 +91,29 @@ const padWeeks = async (route) => {
 // (a colour off the panel) and the same pixels as that strip of the chart canvas, wherever the scroller is. Below the
 // y-axis it shows only panel: the first date label spills into the left strip and must not stay pinned. Touches on a
 // pin fall through to the chart, so a swipe that starts on an axis still scrolls it.
-async function expectPinned(page) {
+async function expectPinned(page: Page) {
   await page.locator('.chart-frame').scrollIntoViewIfNeeded(); // elementFromPoint sees only the viewport, and the chart sits below the fold on a phone
   const pins = await page.evaluate(() => {
-    const s = document.querySelector('.chart-scroll').getBoundingClientRect();
+    const must = <T>(x: T | null): T => {
+      if (x === null) throw new Error('missing element or context');
+      return x;
+    };
+    const s = must(document.querySelector('.chart-scroll')).getBoundingClientRect();
     const c = __chart.canvas;
     const dpr = __chart.currentDevicePixelRatio;
     const a = __chart.chartArea;
     const cut = Math.round((__chart.scales.x.top + __chart.scales.x.options.grid.tickLength) * dpr) * 4; // in bytes per column
-    const strip = (x0, x1) =>
-      c.getContext('2d').getImageData(Math.round(x0 * dpr), 0, Math.round((x1 - x0) * dpr), c.height).data;
-    return [
+    const strip = (x0: number, x1: number) =>
+      must(c.getContext('2d')).getImageData(Math.round(x0 * dpr), 0, Math.round((x1 - x0) * dpr), c.height).data;
+    const strips: [side: string, x0: number, x1: number][] = [
       ['left', 0, a.left],
       ['right', a.right, __chart.width],
-    ].map(([side, x0, x1]) => {
-      const p = document.querySelector(`.axis-pin.${side}`);
+    ];
+    return strips.map(([side, x0, x1]) => {
+      const p = must(document.querySelector<HTMLCanvasElement>(`.axis-pin.${side}`));
       const r = p.getBoundingClientRect();
       const ink = strip(x0, x1);
-      const own = p.getContext('2d').getImageData(0, 0, p.width, p.height).data;
+      const own = must(p.getContext('2d')).getImageData(0, 0, p.width, p.height).data;
       const below = cut * p.width; // bytes before the first row under the y-axis
       let inked = 0;
       let differ = 0;
@@ -115,10 +153,11 @@ async function expectPinned(page) {
   }
 }
 
-for (const [name, viewport] of [
+const viewports: [name: string, viewport: { width: number; height: number }][] = [
   ['desktop 1280x800', { width: 1280, height: 800 }],
   ['mobile 375x812', { width: 375, height: 812 }],
-]) {
+];
+for (const [name, viewport] of viewports) {
   test.describe(name, () => {
     test.use({ viewport });
     const mobile = viewport.width < 720;
@@ -139,7 +178,7 @@ for (const [name, viewport] of [
       await page.locator('#chart').scrollIntoViewIfNeeded();
       const { x, y } = await page.evaluate(() => {
         const rows = __chart.data.datasets.filter((d) => d.type !== 'line').map((d) => d.data);
-        const totals = rows[0].map((_, i) => rows.reduce((s, r) => s + r[i], 0));
+        const totals = rows[0].map((_, i) => rows.reduce((s, r) => s + (r[i] ?? 0), 0));
         const i = totals.indexOf(Math.max(...totals));
         const box = __chart.canvas.getBoundingClientRect();
         return { x: box.left + __chart.getDatasetMeta(0).data[i].x, y: box.top + __chart.chartArea.bottom - 3 };
@@ -202,7 +241,10 @@ for (const [name, viewport] of [
     test('model markers a day apart stack instead of colliding', async ({ page }) => {
       await page.route('**/data/annotations.json', async (route) => {
         const res = await route.fetch();
-        await route.fulfill({ response: res, json: (await res.json()).map((a) => ({ ...a, major: true })) }); // Model B, a day after A
+        await route.fulfill({
+          response: res,
+          json: (await res.json()).map((a: Annotation) => ({ ...a, major: true })),
+        }); // Model B, a day after A
       });
       await open(page, 'claude-code/');
       const m = await page.evaluate(() => __chart.$markers);
@@ -243,18 +285,23 @@ for (const [name, viewport] of [
         await open(page, `${id}/`);
         const fix = await page.evaluate(() => {
           const d = __chart.data.datasets.find((x) => x.label === 'Fixes %');
+          if (!d) throw new Error('no Fixes % line');
           return { axis: d.yAxisID, v: d.data };
         });
         expect(fix.axis).toBe('y1');
         const vals = fix.v.filter((v) => v !== null);
         expect(vals.length).toBeGreaterThan(0);
         expect(vals.every((v) => v >= 0 && v <= 1)).toBe(true);
-        const weekly = JSON.parse(readFileSync(join(out, `data/${id}/weekly.json`), 'utf8'));
-        const c = (r, k) => r.counts[k] ?? 0;
-        const pooled = (rows) => {
+        const weekly: CountRow[] = JSON.parse(readFileSync(join(out, `data/${id}/weekly.json`), 'utf8'));
+        const c = (r: CountRow, k: keyof Counts) => r.counts[k] ?? 0;
+        const pooled = (rows: CountRow[]) => {
           const den = rows.reduce(
             (s, r) =>
-              s + ['added', 'fixed', 'changed', 'improved', 'removed', 'revert'].reduce((a, k) => a + c(r, k), 0),
+              s +
+              (['added', 'fixed', 'changed', 'improved', 'removed', 'revert'] as const).reduce(
+                (a, k) => a + c(r, k),
+                0,
+              ),
             0,
           ); // the four counted buckets
           return den === 0 ? null : rows.reduce((s, r) => s + c(r, 'fixed') + c(r, 'revert'), 0) / den;
@@ -272,16 +319,18 @@ for (const [name, viewport] of [
       test.skip(!mobile, 'mobile only');
       await page.route('**/data/claude-code/weekly.json', padWeeks);
       await open(page, 'claude-code/');
-      const m = await page.evaluate(() => {
-        const s = document.querySelector('.chart-scroll');
-        return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft, pos: __chart.scales.y.position };
-      });
+      const m = await page.locator('.chart-scroll').evaluate((s) => ({
+        sw: s.scrollWidth,
+        cw: s.clientWidth,
+        left: s.scrollLeft,
+        pos: __chart.scales.y.position,
+      }));
       expect(m.sw).toBeGreaterThan(m.cw);
       expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
       expect(m.pos).toBe('left');
       await expectPinned(page);
-      await page.evaluate(() => {
-        document.querySelector('.chart-scroll').scrollLeft = 0;
+      await page.locator('.chart-scroll').evaluate((s) => {
+        s.scrollLeft = 0;
       });
       await expectPinned(page);
     });
@@ -289,7 +338,7 @@ for (const [name, viewport] of [
     test('wide screens fit the chart to the page with the count axis on the left', async ({ page }) => {
       test.skip(mobile, 'desktop only');
       await open(page, 'claude-code/');
-      expect(await page.evaluate(() => document.querySelector('.chart-wrap').style.width)).toBe('');
+      expect(await page.locator('.chart-wrap').evaluate((w) => (w as HTMLElement).style.width)).toBe('');
       expect(await page.evaluate(() => __chart.scales.y.position)).toBe('left');
       await expect(page.locator('.axis-pin')).toHaveCount(2);
       for (const pin of await page.locator('.axis-pin').all()) await expect(pin).toBeHidden();
@@ -350,7 +399,7 @@ test('a category outside the four buckets is not drawn and not counted, and the 
   const first = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8'))[0].counts;
   const counted = ['added', 'fixed', 'changed', 'improved', 'removed'].reduce((s, k) => s + (first[k] ?? 0), 0);
   expect(
-    await page.evaluate(() => __chart.data.datasets.filter((d) => !d.type).reduce((s, d) => s + d.data[0], 0)),
+    await page.evaluate(() => __chart.data.datasets.filter((d) => !d.type).reduce((s, d) => s + (d.data[0] ?? 0), 0)),
   ).toBe(counted); // mystery and other excluded
   const other = JSON.parse(readFileSync(join(out, 'data/claude-code/summary.json'), 'utf8')).totals.byCategory.other;
   await expect(page.locator('#fn-counted')).toContainText(
@@ -362,17 +411,19 @@ test('a category outside the four buckets is not drawn and not counted, and the 
 });
 
 test('the week list and tooltip total exclude set-aside items and label rows by stored category', async ({ page }) => {
-  const months = readdirSync(join(out, 'data/claude-code/months')).flatMap((f) =>
+  const months: MonthEvent[] = readdirSync(join(out, 'data/claude-code/months')).flatMap((f) =>
     JSON.parse(readFileSync(join(out, 'data/claude-code/months', f), 'utf8')),
   );
-  const monday = (d) => {
+  const monday = (d: string) => {
     const t = Date.parse(`${d}T00:00:00Z`);
     return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
   };
   const byWeek = Map.groupBy(months, (e) => monday(e.ts.slice(0, 10)));
-  const [week, evs] = [...byWeek].find(
+  const found = [...byWeek].find(
     ([, es]) => es.some((e) => e.category === 'other') && es.some((e) => e.category !== 'other'),
   ); // a week with both kinds
+  if (!found) throw new Error('the fixture has no week with both kinds');
+  const [week, evs] = found;
   const counted = evs.filter((e) => e.category !== 'other').length;
   await open(page, 'claude-code/');
   await page.locator('#chart').scrollIntoViewIfNeeded();
@@ -402,15 +453,16 @@ test('a finger drag over the chart does not move the tooltip; a tap picks the we
   const active = await page.evaluate(async () => {
     const c = __chart.canvas;
     const box = c.getBoundingClientRect();
-    const at = (i) => ({
+    const at = (i: number) => ({
       clientX: box.left + __chart.getDatasetMeta(0).data[i].x,
       clientY: box.top + __chart.chartArea.bottom - 3,
     });
-    for (const [type, i] of [
+    const moves: [type: string, i: number][] = [
       ['touchstart', 1],
       ['touchmove', 2],
       ['touchmove', 3],
-    ]) {
+    ];
+    for (const [type, i] of moves) {
       const touch = new Touch({ identifier: 1, target: c, ...at(i) });
       c.dispatchEvent(
         new TouchEvent(type, { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }),
@@ -499,10 +551,9 @@ test('resizing across the breakpoint pins the axes and scrolls to the latest wee
   await expect(page.locator('.axis-pin.left')).toBeHidden();
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.locator('.axis-pin.left')).toBeVisible();
-  const m = await page.evaluate(() => {
-    const s = document.querySelector('.chart-scroll');
-    return { sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft };
-  });
+  const m = await page
+    .locator('.chart-scroll')
+    .evaluate((s) => ({ sw: s.scrollWidth, cw: s.clientWidth, left: s.scrollLeft }));
   expect(m.sw).toBeGreaterThan(m.cw);
   expect(Math.abs(m.left - (m.sw - m.cw))).toBeLessThanOrEqual(2);
   await expectPinned(page);
@@ -527,19 +578,23 @@ test("commit size is the median over the window's sizes, compared with the prior
 
 // The panel's background as the canvas sees it, beside what the chart drew: the line's halo, a bar's gap edge and
 // the inside of a model-marker badge (left of its digit) should all be that colour.
-const colours = (page) =>
+const colours = (page: Page) =>
   page.evaluate(() => {
-    const hex = (c) => {
-      const g = document.createElement('canvas').getContext('2d');
+    const must = <T>(x: T | null): T => {
+      if (x === null) throw new Error('missing element or context');
+      return x;
+    };
+    const hex = (c: string) => {
+      const g = must(document.createElement('canvas').getContext('2d'));
       g.fillStyle = c;
       return g.fillStyle;
     };
     const halo = __chart.data.datasets.findIndex((d) => d.label === 'halo');
     const [m] = __chart.$markers;
     const r = __chart.currentDevicePixelRatio;
-    const px = __chart.ctx.getImageData(Math.round((m.x - 5) * r), Math.round(m.y * r), 1, 1).data;
+    const px = __chart.ctx.getImageData(Math.round((m.x - 5) * r), Math.round((m.y ?? 0) * r), 1, 1).data;
     return {
-      panel: hex(getComputedStyle(document.querySelector('.panel')).backgroundColor),
+      panel: hex(getComputedStyle(must(document.querySelector('.panel'))).backgroundColor),
       drawn: [
         hex(__chart.getDatasetMeta(halo).dataset.options.borderColor),
         hex(__chart.getDatasetMeta(0).data[0].options.borderColor),
@@ -549,7 +604,7 @@ const colours = (page) =>
   });
 const LIGHT = '#ffffff';
 const DARK = '#12151a';
-const painted = (panel) => ({ panel, drawn: [panel, panel, panel] });
+const painted = (panel: string) => ({ panel, drawn: [panel, panel, panel] });
 
 test('the page and the chart follow the colour scheme, live, without a reload', async ({ browser }) => {
   const page = await (await browser.newContext({ colorScheme: 'light' })).newPage();
@@ -609,9 +664,9 @@ test("a stored theme applies from the page's own head, before app.js: on the roo
 });
 
 test('category tags in the week list keep their text readable (4.5:1) in both schemes', async ({ browser }) => {
-  for (const colorScheme of ['light', 'dark']) {
+  for (const colorScheme of ['light', 'dark'] as const) {
     const page = await (await browser.newContext({ colorScheme })).newPage();
-    const ratios = {};
+    const ratios: Record<string, number> = {};
     for (const path of ['claude-code/#2026-08-19', 'claude-code/#2026-09-19', 'sparse/#2026-08-21']) {
       // between them, one tag per bucket
       await open(page, path);
@@ -620,13 +675,14 @@ test('category tags in the week list keep their text readable (4.5:1) in both sc
         ratios,
         await page.evaluate(() => {
           // Computed colours may serialise as color(srgb …); painting one pixel turns any form into rgb.
-          const rgb = (c) => {
+          const rgb = (c: string) => {
             const g = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d');
+            if (!g) throw new Error('no 2d context');
             g.fillStyle = c;
             g.fillRect(0, 0, 1, 1);
             return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3);
           };
-          const lum = (c) =>
+          const lum = (c: string) =>
             rgb(c)
               .map((v) => v / 255)
               .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
@@ -649,8 +705,9 @@ test('category tags in the week list keep their text readable (4.5:1) in both sc
 
 test('each KPI tile is its measure over the last 4 complete weeks against the 4 before', async ({ page }) => {
   // Exactly 8 complete weeks and the current one: both windows full, the shortest history that has a prior period.
-  const rows = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8')).slice(-9);
-  const counts = (i) => (i < 4 ? { fixed: 1, changed: 1 } : i < 8 ? { added: 2, fixed: 1, changed: 1 } : {});
+  const rows: CountRow[] = JSON.parse(readFileSync(join(out, 'data/claude-code/weekly.json'), 'utf8')).slice(-9);
+  const counts = (i: number): Counts =>
+    i < 4 ? { fixed: 1, changed: 1 } : i < 8 ? { added: 2, fixed: 1, changed: 1 } : {};
   const weekly = rows.map((r, i) => ({
     d: r.d,
     counts: counts(i),

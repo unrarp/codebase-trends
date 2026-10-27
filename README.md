@@ -54,24 +54,24 @@ Two bases, set per project in `projects.json`:
   project's `bots` list, or ends in `[bot]`, is flagged in the drill-down.
 
 ```
-projects.json ─► src/collect.js ─► data/<project>/events.jsonl   raw facts, append-only
+projects.json ─► src/collect.ts ─► data/<project>/events.jsonl   raw facts, append-only
                                    data/<project>/dates.json     changelog basis
 pending = events with no rule category and no label (derived, never stored)
         ─► model (the routine agent, or scripts/classify-local.sh)
-        ─► src/apply-labels.js ─► data/<project>/classifications.jsonl
-events + rules (src/classify.js) + classifications + annotations.json
-        ─► src/build.js ─► docs/data/** + docs/<project>/index.html
-        ─► src/validate.js   shape and invariants
+        ─► src/apply-labels.ts ─► data/<project>/classifications.jsonl
+events + rules (src/classify.ts) + classifications + annotations.json
+        ─► src/build.ts ─► docs/data/** + docs/<project>/index.html
+        ─► src/validate.ts   shape and invariants
 ```
 
 Categories are derived on every build, never stored on events: a rule in
-`src/classify.js` first, else the model's cached label for that text, else
+`src/classify.ts` first, else the model's cached label for that text, else
 `other`. Changing a rule relabels all history on the next build. `data/` and
 `docs/` (except `docs/vendor/`) are machine-written; never edit them by hand.
 
 ### Routine
 
-Every six hours (`0 */6 * * *`) a Claude Code routine runs `node src/routine.js`.
+Every six hours (`0 */6 * * *`) a Claude Code routine runs `node src/routine.ts`.
 Its saved prompt only points to [`ROUTINE.md`](ROUTINE.md), so behaviour
 changes are commits. The script collects every project and builds the site. If nothing
 under `data/` or `docs/` changed it stops; otherwise it runs
@@ -81,7 +81,7 @@ Either way a successful run pings healthchecks.io.
 - **Classify hand-off:** new events with no rule category are written as
   batches to `.routine/batches/` and the script exits 3. The agent labels them
   with `src/model/prompt.md` into `.routine/answers/` and runs
-  `node src/routine.js --labels .routine/answers/`, which validates every
+  `node src/routine.ts --labels .routine/answers/`, which validates every
   answer before appending any. Unanswered items stay pending for the next run.
 - **Only what changed is committed.** The first build is stamped with the
   published `generatedAt`; if `data/` and `docs/` then match the committed
@@ -98,24 +98,33 @@ Either way a successful run pings healthchecks.io.
 ## Developing
 
 ```sh
+nvm use                           # .nvmrc pins Node 22.22.0, the routine's version
 npm install
 npx playwright install chromium   # once, for the browser test
 git config core.hooksPath hooks   # runs `npm run check` before every push
 git config blame.ignoreRevsFile .git-blame-ignore-revs   # blame skips the Biome reformat
 ```
 
-Zero runtime dependencies, plain ESM, Node ≥ 22; Playwright and Biome are the
-only devDependencies.
+Zero runtime dependencies. The Node side is TypeScript that Node ≥ 22.18 runs
+directly by stripping the types, so there is no build step and only erasable
+syntax is allowed (`tsconfig.json`'s `erasableSyntaxOnly`). Playwright, Biome,
+TypeScript and `@types/node` are the only devDependencies.
 
 | script | runs | where |
 |---|---|---|
-| `npm test` | `node --test 'test/**/*.test.js'` | everywhere |
-| `npm run check:syntax` | `node --check` over `src/` and `scripts/` | everywhere |
-| `npm run check:data` | `node src/validate.js` over `docs/` | everywhere |
+| `npm test` | `node --test 'test/**/*.test.ts'` | everywhere |
+| `npm run check:syntax` | imports every module under `src/` and `scripts/` (`node --check` passes any `.ts` file unchecked), then `node --check src/site/app.js` | everywhere |
+| `npm run check:data` | `node src/validate.ts` over `docs/` | everywhere |
+| `npm run check:types` | `tsc`: strict type check, emits nothing (`tsconfig.json`) | local only |
 | `npm run check:lint` | `biome check`: recommended lint rules, formatting, import order (`biome.json`); `npx biome check --write` fixes | local only |
 | `npm run check:browser` | Playwright smoke test at 1280×800 and 375×812 | local only |
 | `npm run check:core` | test + check:syntax + check:data | routine, before every commit |
-| `npm run check` | check:core + check:lint + check:browser | `hooks/pre-push` |
+| `npm run check` | check:core + check:types + check:lint + check:browser | `hooks/pre-push` |
+
+**VS Code:** `.vscode/` makes Biome the formatter on save and adds debug
+configs: *Dev server*, *Current file*, *Current test file* (Node, pinned to
+22.22.0 through nvm) and *Site in Chromium*. Breakpoints in `.ts` files bind
+to their own lines, since stripping the types leaves every line in place.
 
 The browser test builds the fixtures into a temp dir and serves them at
 `/codebase-trends/`, so a root-absolute URL fails it.
@@ -124,13 +133,12 @@ The browser test builds the fixtures into a temp dir and serves them at
 <http://localhost:8090/codebase-trends/> (`PORT` overrides), restarting and
 rebuilding whenever `src/`, `scripts/`, `data/` or the config changes; it
 writes nothing in the repo. Set breakpoints in `app.js` in the browser's
-DevTools. To step through `build.js`, run `npm run dev` from VS Code's
-JavaScript Debug Terminal, or `node --inspect-brk scripts/dev.js` and attach
-from `chrome://inspect`.
+DevTools. To step through `build.ts`, start the *Dev server* debug config, or
+run `node --inspect-brk scripts/dev.ts` and attach from `chrome://inspect`.
 
 The site is hand-written browser JS (`src/site/app.js`, `app.css`) plus
 Chart.js 4.5.1 (MIT), vendored unmodified at `docs/vendor/chart.umd.js`.
-`build.js` copies the site files into `docs/` and stamps each asset URL with
+`build.ts` copies the site files into `docs/` and stamps each asset URL with
 its content hash, so a changed script loads with the page instead of after the
 Pages and browser caches expire.
 
@@ -151,5 +159,5 @@ re-run to re-ask what is still pending.
    data too) and push.
 
 Pages and the project switcher are generated from config; a new project needs
-no code. Commits are sized as they are collected; `scripts/backfill-stats.js`
+no code. Commits are sized as they are collected; `scripts/backfill-stats.ts`
 adds `stats` to commit events stored without them, from a full clone.

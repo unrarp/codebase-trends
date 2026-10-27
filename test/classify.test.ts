@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { parseChangelog } from '../src/adapters/changelog-md.js';
-import { CATEGORIES, COUNTED, classifyByRule } from '../src/classify.js';
+import { parseChangelog } from '../src/adapters/changelog-md.ts';
+import { CATEGORIES, COUNTED, classifyByRule } from '../src/classify.ts';
+import type { Category, Event } from '../src/types.ts';
 
-const ev = (text) => ({ kind: 'changelog', text });
+const event = (kind: Event['kind'], text: string): Event => ({
+  id: 'id',
+  textHash: 'hash',
+  project: 'p',
+  kind,
+  text,
+  tags: [],
+});
+const ev = (text: string) => event('changelog', text);
 
-const table = {
+const table: Record<string, Category> = {
   fix: 'fixed',
   fixes: 'fixed',
   fixed: 'fixed',
@@ -31,18 +40,18 @@ const table = {
 
 for (const [word, category] of Object.entries(table)) {
   test(`changelog first word "${word}" -> ${category}`, () => {
-    assert.equal(classifyByRule(ev(`${word} something`), {}), category);
+    assert.equal(classifyByRule(ev(`${word} something`)), category);
   });
 }
 
 test('case and trailing :, are normalised', () => {
-  assert.equal(classifyByRule(ev('Fixed: a thing'), {}), 'fixed');
-  assert.equal(classifyByRule(ev('ADDED, a thing'), {}), 'added');
+  assert.equal(classifyByRule(ev('Fixed: a thing')), 'fixed');
+  assert.equal(classifyByRule(ev('ADDED, a thing')), 'added');
 });
 
 test('residual -> null', () => {
-  assert.equal(classifyByRule(ev('Bug fixes and reliability improvements'), {}), null);
-  assert.equal(classifyByRule(ev('constructor thing'), {}), null);
+  assert.equal(classifyByRule(ev('Bug fixes and reliability improvements')), null);
+  assert.equal(classifyByRule(ev('constructor thing')), null);
 });
 
 test('a leading "Scope:" lead-in is skipped to find the first word', () => {
@@ -54,13 +63,13 @@ test('a leading "Scope:" lead-in is skipped to find the first word', () => {
     '- Self-hosted runner: Improved startup time',
     '- IDE: Various improvements and bug fixes',
   ].join('\n');
-  const got = parseChangelog(md, 'claude-code').map((e) => classifyByRule(e, {}));
+  const got = parseChangelog(md, 'claude-code').map((e) => classifyByRule(e));
   assert.deepEqual(got, ['fixed', 'added', 'improved', null]);
 });
 
-const cm = (text, project = {}) => classifyByRule({ kind: 'commit', text }, project);
+const cm = (text: string) => classifyByRule(event('commit', text));
 
-const PREFIXES = {
+const PREFIXES: Record<string, Category> = {
   feat: 'added',
   fix: 'fixed',
   perf: 'improved',
@@ -108,13 +117,16 @@ test('commit rule categories stay inside CATEGORIES.commits', () => {
     'Change x',
     'Remove x',
   ];
-  for (const t of texts) assert.ok(CATEGORIES.commits.includes(cm(t)), t);
+  for (const t of texts) {
+    const category = cm(t);
+    assert.ok(category && CATEGORIES.commits.includes(category), t);
+  }
 });
 
 test("COUNTED matches the site's GROUPS (src/site/app.js), which draws and counts the same buckets", () => {
   const app = readFileSync(new URL('../src/site/app.js', import.meta.url), 'utf8');
   const groups = [
-    ...app.match(/const GROUPS = \[\n.*?\n\s*\];/s)[0].matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g),
+    ...(app.match(/const GROUPS = \[\n.*?\n\s*\];/s)?.[0] ?? '').matchAll(/key: '(\w+)'.*?cats: \[([^\]]*)\]/g),
   ].map((m) => [m[1], [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1])]);
   assert.equal(groups.length, 4);
   assert.deepEqual(groups.flatMap(([, cats]) => cats).sort(), [...COUNTED].sort());
