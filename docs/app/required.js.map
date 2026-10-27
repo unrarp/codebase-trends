@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "sources": [
+    "required.ts"
+  ],
+  "names": [],
+  "mappings": "AAAA,oHAAoH,GACpH,OAAO,SAAS,SAAY,KAA2B,EAAE,IAAY;IACnE,IAAI,SAAS,MAAM,MAAM,IAAI,MAAM,CAAC,QAAQ,EAAE,MAAM;IACpD,OAAO;AACT",
+  "sourcesContent": [
+    "/** `value`, or a thrown error naming `what` when it is null or undefined: for lookups the page cannot run without. */\nexport function required<T>(value: T | null | undefined, what: string): T {\n  if (value == null) throw new Error(`missing ${what}`);\n  return value;\n}\n"
+  ]
+}

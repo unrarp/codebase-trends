@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "sources": [
+    "storage.ts"
+  ],
+  "names": [],
+  "mappings": "AAAA,yFAAyF;AAEzF,OAAO,MAAM,OAAO,0BAA0B;AAC9C,OAAO,MAAM,QAAQ,wBAAwB,CAAC,oGAAoG;AAClJ,4FAA4F;AAC5F,OAAO,MAAM,aAAa,CAAC;IACzB,IAAI;QACF,OAAO,aAAa,OAAO,CAAC;IAC9B,EAAE,OAAM;QACN,OAAO;IACT;AACF,EAAE;AACF,OAAO,MAAM,WAAW,CAAC,KAAa;IACpC,IAAI;QACF,IAAI,SAAS,MAAM,aAAa,UAAU,CAAC;aACtC,aAAa,OAAO,CAAC,KAAK;IACjC,EAAE,OAAM,CAAC;AACX,EAAE",
+  "sourcesContent": [
+    "// What the browser remembers between visits: the last project viewed and a picked theme.\n\nexport const LAST = 'codebase-trends:project';\nexport const THEME = 'codebase-trends:theme'; // the head of page.html and index.html reads it too, to apply a picked theme before the first paint\n// Storage throws when the browser blocks it; remembering is optional. A null value forgets.\nexport const remembered = (key: string): string | null => {\n  try {\n    return localStorage.getItem(key);\n  } catch {\n    return null;\n  }\n};\nexport const remember = (key: string, value: string | null): void => {\n  try {\n    if (value == null) localStorage.removeItem(key);\n    else localStorage.setItem(key, value);\n  } catch {}\n};\n"
+  ]
+}

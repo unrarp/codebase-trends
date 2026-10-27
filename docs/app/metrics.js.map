@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "sources": [
+    "metrics.ts"
+  ],
+  "names": [],
+  "mappings": "AAAA,wEAAwE;AAExE,SAAS,YAAY,EAAE,OAAO,QAAQ,cAAc;AAEpD,OAAO,MAAM,OAAO,EAAE,CAAC,+DAA+D;AAEtF,OAAO,MAAM,MAAM,CAAI,MAAoB,IAAgC,KAAK,MAAM,CAAC,CAAC,GAAG,IAAM,IAAI,EAAE,IAAI,GAAG;AAC9G,OAAO,MAAM,QAAQ,CAAC,IAAwB,CAAC,EAAE,MAAM,CAAC,KAAK,IAAI,CAAC,IAAI,CAAC,EAAE,MAAM,CAAC,MAAM,IAAI,CAAC,EAAE;AAC7F,sEAAsE,GACtE,OAAO,MAAM,QAAQ,CAAC,IAAwB,IAAI,aAAa,EAAE,MAAM,GAAG,CAAC,IAAO,QAAQ,KAAM,EAAE,MAAM,CAAC,EAAE,IAAI,IAAK,GAAI;AACxH,oEAAoE,GACpE,OAAO,MAAM,YAAY,CAAC;IACxB,MAAM,IAAI,IAAI,MAAM;IACpB,OAAO,MAAM,IAAI,OAAO,IAAI,MAAM,SAAS;AAC7C,EAAE;AACF,qEAAqE,GACrE,OAAO,MAAM,SAAS,CAAC;IACrB,MAAM,IAAI;WAAI;KAAG,CAAC,IAAI,CAAC,CAAC,GAAG,IAAM,IAAI;IACrC,OAAO,EAAE,MAAM,GAAG,CAAC,CAAC,CAAC,AAAC,EAAE,MAAM,GAAG,KAAM,EAAE,GAAG,CAAC,CAAC,EAAE,MAAM,IAAI,EAAE,IAAI,IAAI;AACtE,EAAE",
+  "sourcesContent": [
+    "// The measures over weekly rows that the KPI tiles and the chart share.\nimport type { CountRow } from '../types.ts';\nimport { categoriesOf, groupOf } from './groups.ts';\n\nexport const ROLL = 4; // weeks in the rolling fix share window and in each KPI window\n\nexport const sum = <T>(rows: readonly T[], f: (r: T) => number): number => rows.reduce((s, r) => s + f(r), 0);\nexport const fixes = (r: CountRow): number => (r.counts.fixed ?? 0) + (r.counts.revert ?? 0);\n/** Product changes in a row: every category that belongs to a group. */\nexport const shown = (r: CountRow): number => sum(categoriesOf(r.counts), (c) => (groupOf(c) ? (r.counts[c] ?? 0) : 0));\n/** Pooled fix share over rows; null when no product change landed. */\nexport const pooledFix = (rows: CountRow[]): number | null => {\n  const d = sum(rows, shown);\n  return d === 0 ? null : sum(rows, fixes) / d;\n};\n/** Median of a list of sizes (not assumed sorted); null when empty. */\nexport const median = (xs: number[]): number | null => {\n  const s = [...xs].sort((a, b) => a - b);\n  return s.length ? (s[(s.length - 1) >> 1] + s[s.length >> 1]) / 2 : null;\n};\n"
+  ]
+}

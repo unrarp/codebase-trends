@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bun · codebase-trends</title>
-<!-- A theme picked with the button (app.js) applies before the first paint; without one, the OS decides. -->
+<!-- A theme picked with the button (app.ts) applies before the first paint; without one, the OS decides. -->
 <script>try { const t = localStorage.getItem('codebase-trends:theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
-<link rel="stylesheet" href="../app.css?v=f0d8ee73">
+<link rel="stylesheet" href="../app.css?v=25197f92">
 </head>
 <body data-project="bun" data-basis="commits">
 <main class="wrap">
@@ -21,7 +21,7 @@
     <div id="kpis" class="kpis"></div>
   </section>
   <section class="panel">
-    <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
+    <!-- biome-ignore lint/a11y/useHeadingContent: app.ts fills the title -->
     <h2 id="title"></h2>
     <p id="subtitle" class="sub"></p>
     <div id="legend" class="legend"></div>
@@ -33,7 +33,7 @@
   </section>
   <section id="drill" class="panel" hidden>
     <div class="panel-head">
-      <!-- biome-ignore lint/a11y/useHeadingContent: app.js fills the title -->
+      <!-- biome-ignore lint/a11y/useHeadingContent: app.ts fills the title -->
       <h2 id="drill-title"></h2>
       <button id="drill-close" class="btn" type="button">Close</button>
     </div>
@@ -56,6 +56,8 @@
   </div>
 </dialog>
 <script src="../vendor/chart.umd.js?v=ecc3cd1e"></script>
-<script src="../app.js?v=7055e54f" defer></script>
+<!-- build.ts fills the empty import map: each module's .ts import loads its built .js, stamped with its content hash. -->
+<script type="importmap">{"imports":{"../app/app.ts":"../app/app.js?v=753d540d","../app/chart.ts":"../app/chart.js?v=1178fb76","../app/data.ts":"../app/data.js?v=8a2fdb25","../app/dom.ts":"../app/dom.js?v=5464e10c","../app/drill.ts":"../app/drill.js?v=a9563e8a","../app/format.ts":"../app/format.js?v=bee0aaae","../app/groups.ts":"../app/groups.js?v=2a997acf","../app/help.ts":"../app/help.js?v=fe19e458","../app/kpis.ts":"../app/kpis.js?v=512371a8","../app/legend.ts":"../app/legend.js?v=ec8107bf","../app/metrics.ts":"../app/metrics.js?v=6ba6ba0c","../app/model.ts":"../app/model.js?v=af4f1fb0","../app/project.ts":"../app/project.js?v=ff164144","../app/required.ts":"../app/required.js?v=410c1a4a","../app/storage.ts":"../app/storage.js?v=f8f1c0c9","../app/theme.ts":"../app/theme.js?v=ba2618be","../app/time.ts":"../app/time.js?v=ad0f9f2c"}}</script>
+<script type="module">import '../app/app.ts';</script>
 </body>
 </html>

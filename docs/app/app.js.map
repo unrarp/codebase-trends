@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "sources": [
+    "app.ts"
+  ],
+  "names": [],
+  "mappings": "AAAA,0EAA0E;AAE1E,SAAS,GAAG,QAAQ,YAAY;AAChC,SAAS,WAAW,QAAQ,eAAe;AAC3C,SAAS,IAAI,EAAE,UAAU,QAAQ,eAAe;AAEhD,mGAAmG;AACnG,eAAe;IACb,MAAM,MAAM,CAAC,MAAM,IAAoB,uBAAuB,EAAE,GAAG,CAAC,CAAC,IAAM,EAAE,EAAE;IAC/E,MAAM,OAAO,WAAW;IACxB,SAAS,OAAO,CAAC,CAAC,EAAE,EAAE,SAAS,QAAQ,IAAI,QAAQ,CAAC,QAAQ,OAAO,GAAG,CAAC,EAAE,CAAC,CAAC,CAAC;AAC9E;AAEA,CAAC,SAAS,IAAI,CAAC,OAAO,CAAC,OAAO,GAAG,cAAc,SAAS",
+  "sourcesContent": [
+    "// The entry: a page with a project renders it; the root redirects to one.\nimport type { ProjectEntry } from '../types.ts';\nimport { get } from './data.ts';\nimport { projectPage } from './project.ts';\nimport { LAST, remembered } from './storage.ts';\n\n// The root has no content of its own: it opens the last project viewed, else the first configured.\nasync function indexPage(): Promise<void> {\n  const ids = (await get<ProjectEntry[]>('./data/projects.json')).map((p) => p.id);\n  const last = remembered(LAST);\n  location.replace(`./${last !== null && ids.includes(last) ? last : ids[0]}/`);\n}\n\n(document.body.dataset.project ? projectPage : indexPage)();\n"
+  ]
+}

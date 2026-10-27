@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "sources": [
+    "time.ts"
+  ],
+  "names": [],
+  "mappings": "AAAA,sFAAsF;AAEtF,OAAO,MAAM,MAAM,WAAW;AAC9B,OAAO,MAAM,OAAO,IAAI,IAAI;AAE5B,OAAO,MAAM,QAAQ,CAAC,IAAsB,IAAI,KAAK,GAAG,WAAW,GAAG,KAAK,CAAC,GAAG,IAAI;AACnF,OAAO,MAAM,WAAW,CAAC;IACvB,MAAM,IAAI,KAAK,KAAK,CAAC,GAAG,EAAE,UAAU,CAAC;IACrC,OAAO,MAAM,IAAI,AAAC,CAAC,IAAI,KAAK,GAAG,SAAS,KAAK,CAAC,IAAI,IAAK;AACzD,EAAE;AACF,OAAO,MAAM,UAAU,CAAC,IAAsB,MAAM,KAAK,KAAK,CAAC,GAAG,EAAE,UAAU,CAAC,IAAI,IAAI,KAAK",
+  "sourcesContent": [
+    "// Calendar arithmetic on ISO dates (`YYYY-MM-DD`, UTC). Weeks start Monday 00:00 UTC.\n\nexport const DAY = 86_400_000;\nexport const WEEK = 7 * DAY;\n\nexport const dayOf = (t: number): string => new Date(t).toISOString().slice(0, 10);\nexport const mondayOf = (d: string): string => {\n  const t = Date.parse(`${d}T00:00:00Z`);\n  return dayOf(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY);\n};\nexport const weekEnd = (d: string): string => dayOf(Date.parse(`${d}T00:00:00Z`) + 6 * DAY);\n"
+  ]
+}
