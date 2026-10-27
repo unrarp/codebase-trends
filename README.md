@@ -120,6 +120,14 @@ only devDependencies.
 The browser test builds the fixtures into a temp dir and serves them at
 `/codebase-trends/`, so a root-absolute URL fails it.
 
+**Dev server:** `npm run dev` builds `data/` into a temp dir and serves it at
+<http://localhost:8090/codebase-trends/> (`PORT` overrides), restarting and
+rebuilding whenever `src/`, `scripts/`, `data/` or the config changes; it
+writes nothing in the repo. Set breakpoints in `app.js` in the browser's
+DevTools. To step through `build.js`, run `npm run dev` from VS Code's
+JavaScript Debug Terminal, or `node --inspect-brk scripts/dev.js` and attach
+from `chrome://inspect`.
+
 The site is hand-written browser JS (`src/site/app.js`, `app.css`) plus
 Chart.js 4.5.1 (MIT), vendored unmodified at `docs/vendor/chart.umd.js`.
 `build.js` copies the site files into `docs/` and stamps each asset URL with

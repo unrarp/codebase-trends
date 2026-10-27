@@ -1,15 +1,13 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, normalize } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
+import { PREFIX, siteServer } from '../scripts/dev.js';
 import { build } from '../src/build.js';
 
 const ROOT = fileURLToPath(new URL('./fixtures/build', import.meta.url));
 const NOW = Date.parse('2026-10-14T12:00:00.000Z'); // fixture generatedAt
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
-const PREFIX = '/codebase-trends/';
 
 // Built in beforeAll, not at load: Playwright also loads this file in its main process, which runs no hooks.
 let out;
@@ -18,16 +16,7 @@ let base;
 test.beforeAll(async () => {
   out = mkdtempSync(join(tmpdir(), 'ct-browser-'));
   build({ root: ROOT, out, now: new Date(NOW) });
-  server = createServer((req, res) => {
-    const url = new URL(req.url, 'http://x').pathname;
-    let file = url.startsWith(PREFIX) ? join(out, normalize(url.slice(PREFIX.length))) : null;
-    if (file && existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
-    if (!file || !existsSync(file)) {
-      res.writeHead(404).end();
-      return;
-    }
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(readFileSync(file));
-  });
+  server = siteServer(out);
   await new Promise((r) => server.listen(0, r));
   base = `http://localhost:${server.address().port}${PREFIX}`;
 });

@@ -8,6 +8,7 @@
   "scripts": {
     "collect": "node src/collect.js",
     "build": "node src/build.js",
+    "dev": "node --watch-path=src --watch-path=scripts --watch-path=data --watch-path=projects.json --watch-path=annotations.json scripts/dev.js",
     "test": "node --test 'test/**/*.test.js'",
     "check:syntax": "for f in $(find src scripts -name '*.js' 2>/dev/null); do node --check \"$f\" || exit 1; done",
     "check:data": "node src/validate.js",
