@@ -2,9 +2,9 @@
   "project": "bun",
   "name": "Bun",
   "basis": "commits",
-  "generatedAt": "2026-11-06T19:21:37.456Z",
+  "generatedAt": "2026-11-07T01:21:11.421Z",
   "firstDate": "2025-01-01",
-  "lastDate": "2026-11-06",
+  "lastDate": "2026-11-07",
   "totals": {
     "events": 7269,
     "byCategory": {
