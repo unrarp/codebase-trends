@@ -2,9 +2,9 @@
   "project": "claude-code",
   "name": "Claude Code",
   "basis": "changelog",
-  "generatedAt": "2026-11-10T19:21:04.289Z",
+  "generatedAt": "2026-11-11T01:22:09.043Z",
   "firstDate": "2025-03-04",
-  "lastDate": "2026-11-10",
+  "lastDate": "2026-11-11",
   "totals": {
     "events": 8933,
     "byCategory": {
