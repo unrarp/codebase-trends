@@ -2,15 +2,15 @@
   "project": "bun",
   "name": "Bun",
   "basis": "commits",
-  "generatedAt": "2026-11-13T07:21:23.340Z",
+  "generatedAt": "2026-11-13T14:02:28.021Z",
   "firstDate": "2025-01-01",
   "lastDate": "2026-11-13",
   "totals": {
-    "events": 7288,
+    "events": 7289,
     "byCategory": {
       "added": 684,
       "fixed": 3452,
-      "changed": 1008,
+      "changed": 1009,
       "improved": 451,
       "removed": 235,
       "other": 30,
@@ -22,7 +22,7 @@
     },
     "bySource": {
       "rule": 3272,
-      "model": 4016,
+      "model": 4017,
       "pending": 0
     }
   }
