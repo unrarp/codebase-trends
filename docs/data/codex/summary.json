@@ -2,16 +2,16 @@
   "project": "codex",
   "name": "Codex",
   "basis": "commits",
-  "generatedAt": "2026-11-14T07:26:24.253Z",
+  "generatedAt": "2026-11-14T13:24:54.666Z",
   "firstDate": "2025-04-16",
   "lastDate": "2026-11-14",
   "totals": {
-    "events": 13596,
+    "events": 13600,
     "byCategory": {
-      "added": 4142,
-      "fixed": 3319,
-      "changed": 2497,
-      "improved": 1071,
+      "added": 4143,
+      "fixed": 3320,
+      "changed": 2498,
+      "improved": 1072,
       "removed": 405,
       "other": 62,
       "revert": 91,
@@ -22,7 +22,7 @@
     },
     "bySource": {
       "rule": 5593,
-      "model": 8003,
+      "model": 8007,
       "pending": 0
     }
   }
