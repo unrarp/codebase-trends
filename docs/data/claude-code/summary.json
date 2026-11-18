@@ -2,24 +2,24 @@
   "project": "claude-code",
   "name": "Claude Code",
   "basis": "changelog",
-  "generatedAt": "2026-11-17T19:20:48.183Z",
+  "generatedAt": "2026-11-18T01:21:14.963Z",
   "firstDate": "2025-03-04",
-  "lastDate": "2026-11-17",
+  "lastDate": "2026-11-18",
   "totals": {
-    "events": 9733,
+    "events": 9906,
     "byCategory": {
-      "added": 1330,
-      "fixed": 5973,
-      "changed": 1060,
-      "improved": 1259,
-      "removed": 86,
-      "other": 25
+      "added": 1339,
+      "fixed": 6073,
+      "changed": 1096,
+      "improved": 1285,
+      "removed": 87,
+      "other": 26
     },
     "bySource": {
-      "rule": 8912,
-      "model": 821,
+      "rule": 9084,
+      "model": 822,
       "pending": 0
     },
-    "versions": 442
+    "versions": 443
   }
 }
