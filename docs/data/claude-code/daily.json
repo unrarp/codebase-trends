@@ -625,5 +625,6 @@
 {"d":"2026-11-17","counts":{"added":9,"fixed":100,"changed":36,"improved":26,"removed":1,"other":1},"total":173},
 {"d":"2026-11-18","counts":{"added":14,"fixed":91,"changed":20,"improved":19,"removed":0,"other":0},"total":144},
 {"d":"2026-11-19","counts":{"added":7,"fixed":91,"changed":21,"improved":10,"removed":1,"other":0},"total":130},
-{"d":"2026-11-20","counts":{"added":0,"fixed":0,"changed":0,"improved":0,"removed":0,"other":0},"total":0}
+{"d":"2026-11-20","counts":{"added":16,"fixed":99,"changed":13,"improved":14,"removed":0,"other":0},"total":142},
+{"d":"2026-11-21","counts":{"added":0,"fixed":0,"changed":0,"improved":0,"removed":0,"other":0},"total":0}
 ]
