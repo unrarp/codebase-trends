@@ -2,27 +2,27 @@
   "project": "bun",
   "name": "Bun",
   "basis": "commits",
-  "generatedAt": "2026-11-23T19:21:13.954Z",
+  "generatedAt": "2026-11-24T01:21:54.948Z",
   "firstDate": "2025-01-01",
-  "lastDate": "2026-11-23",
+  "lastDate": "2026-11-24",
   "totals": {
-    "events": 7483,
+    "events": 7492,
     "byCategory": {
-      "added": 688,
-      "fixed": 3487,
-      "changed": 1142,
+      "added": 689,
+      "fixed": 3491,
+      "changed": 1145,
       "improved": 457,
       "removed": 236,
       "other": 30,
       "revert": 75,
       "chore": 496,
-      "test": 416,
+      "test": 417,
       "docs": 203,
       "ci": 253
     },
     "bySource": {
-      "rule": 3291,
-      "model": 4192,
+      "rule": 3294,
+      "model": 4198,
       "pending": 0
     }
   }
